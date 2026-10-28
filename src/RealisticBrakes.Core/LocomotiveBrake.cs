@@ -17,8 +17,7 @@ namespace RealisticBrakes.Core
         /// <summary>The relay's supply from the main reservoir to the cylinders (set to fill in about 4 s, Passenger timing).</summary>
         public Orifice CylinderSupply { get; set; } = new Orifice(5.5);
 
-        /// <summary>The relay's exhaust from the cylinders (set to release in about 15 s).</summary>
-        public Orifice CylinderExhaust { get; set; } = new Orifice(3.6);
+ public Orifice CylinderExhaust { get; set; } = new Orifice(8.5);
 
         /// <summary>
         /// The dead-engine feed: a choke and check valve from the brake pipe
@@ -31,22 +30,25 @@ namespace RealisticBrakes.Core
 
         /// <summary>
         /// The engine's distributor for the automatic brake. Its cylinder is
-        /// only the relay's pilot, so it is small, and it runs in Passenger.
+        /// only the relay's pilot, so it is small, and it runs in Passenger:
+        /// its chokes set the engine's automatic application and release
+        /// times, which the relay follows.
         /// </summary>
         public UicDistributorSpec Distributor { get; set; } = new UicDistributorSpec
         {
             AuxiliaryReservoirVolume = 0.05,
             CylinderVolume = 0.002,
             ApplyPassenger = new Orifice(2.0),
-            ReleasePassenger = new Orifice(1.4),
+            ReleasePassenger = new Orifice(1.05),
         };
     }
 
     /// <summary>
     /// An engine's brake: its main reservoir, the driver's brake valve if it
     /// has one, and its own cylinders. A relay valve fills the cylinders from
-    /// the main reservoir to the greater of the automatic brake's demand, set
-    /// by the engine's own distributor from the pipe, and the independent's.
+    /// the main reservoir to the greater of the automatic brake's demand, the
+    /// pressure in the engine's own distributor's small pilot cylinder, and
+    /// the independent's.
     /// A bail-off takes the automatic part away, as Realistic Firing's does.
     /// The relay only holds or vents toward that demand, so a cylinder the
     /// game forced on (a train found standing braked) stays on while the
@@ -94,10 +96,17 @@ namespace RealisticBrakes.Core
         {
             if (!Distributor.Applied)
                 return 0;
-            var bailed = Math.Max(0, Distributor.TargetCylinder - BailedOff);
-            BailedOff = Distributor.TargetCylinder;
+            var standing = Math.Max(Distributor.TargetCylinder, Pilot);
+            var bailed = Math.Max(0, standing - BailedOff);
+            BailedOff = standing;
             return bailed;
         }
+
+        // The automatic demand: the distributor's pilot cylinder, gauge Pa.
+        private double Pilot => Math.Max(0, Distributor.Cylinder.Pressure - Air.Atmosphere);
+
+        // Whether the distributor stood applied last step: a new application after a release starts without a bail.
+        private bool wasApplied = true;
 
         /// <summary>The compressor's free air delivery, kg/s, into the main reservoir.</summary>
         public double CompressorFlow { get; set; }
@@ -123,9 +132,14 @@ namespace RealisticBrakes.Core
             DriverValve?.Step(MainReservoir, pipe, dt);
             Distributor.Step(pipe, dt);
 
-            // A release clears the bail; a partial release shrinks it with the application, as Realistic Firing's does.
-            BailedOff = Distributor.Applied ? Math.Min(BailedOff, Distributor.TargetCylinder) : 0;
-            var automatic = Distributor.Applied ? Math.Max(0, Distributor.TargetCylinder - Math.Max(0, BailedOff)) : 0;
+            // A release clears the bail; a partial release shrinks it with the application, as Realistic Firing's does. The pilot
+            // comes down at the Passenger release time, so the bail comes down with it, never under it: the engine stays off.
+            var pilot = Pilot;
+            if (Distributor.Applied && !wasApplied)
+                BailedOff = 0;
+            wasApplied = Distributor.Applied;
+            BailedOff = Math.Max(0, Math.Min(BailedOff, Distributor.Applied ? Math.Max(Distributor.TargetCylinder, pilot) : pilot));
+            var automatic = Math.Max(0, pilot - BailedOff);
             var independent = spec.IndependentMaximum * Math.Max(0, Math.Min(1, Independent));
             TargetCylinder = Math.Max(automatic, independent);
             var target = Air.Atmosphere + TargetCylinder;

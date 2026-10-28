@@ -125,14 +125,28 @@ public class UicDistributorTests
     }
 
     [Fact]
-    public void AnOverchargeDroppedQuicklyAppliesTheBrake()
+    public void TheOverloadLimiterKeepsAnOverchargeOutOfTheControlReservoir()
     {
         var (valve, pipe) = Charged();
-        // A long filling stroke: the control reservoir follows the pipe up.
-        Hold(valve, pipe, 5.4, () => false, 120);
-        Assert.InRange(valve.ControlReservoir.GaugeBar, 5.35, 5.4);
+        // A long filling stroke: the control reservoir stops at the working pressure (EP0797521's overload limiter).
+        Hold(valve, pipe, 6.0, () => false, 120);
+        Assert.InRange(valve.ControlReservoir.GaugeBar, 4.99, 5.0);
+        // So the pipe dropped back at once leaves the brake off.
         Hold(valve, pipe, 5.0, () => false, 10);
-        Assert.True(valve.Applied, "brakes should drag after an overcharge dropped at once");
+        Assert.False(valve.Applied, "an overcharge dropped at once applied the brake");
+    }
+
+    [Fact]
+    public void ABrakeMadeDuringAnOverchargeReleasesFully()
+    {
+        var (valve, pipe) = Charged();
+        Hold(valve, pipe, 5.4, () => false, 120);
+        // Half a bar under running asks for its own share, not the overcharge's too.
+        Hold(valve, pipe, 4.5, () => false, 60);
+        Assert.Equal(3.8 * 0.5 / 1.5, valve.Cylinder.GaugeBar, 1);
+        Hold(valve, pipe, 5.0, () => false, 120);
+        Assert.False(valve.Applied, "the car stayed applied after the release");
+        Assert.InRange(valve.Cylinder.GaugeBar, 0, 0.05);
     }
 
     [Fact]

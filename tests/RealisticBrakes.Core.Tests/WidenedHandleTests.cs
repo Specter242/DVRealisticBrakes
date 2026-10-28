@@ -69,6 +69,41 @@ public class SelfLappingHandleTests
         Assert.Throws<ArgumentOutOfRangeException>(() => WidenedHandle.SelfLapping(1));
 }
 
+/// <summary>The DE6's handle on American equipment: the 26-L has no filling stroke, so emergency only.</summary>
+public class AmericanSelfLappingHandleTests
+{
+    private static readonly WidenedHandle Handle = WidenedHandle.SelfLapping(12, fillingStroke: false);
+
+    [Fact]
+    public void ItGainsEmergencyOnly()
+    {
+        Assert.Equal(13, Handle.Notches);
+        Assert.False(Handle.ReleaseNotch);
+        Assert.False(Handle.SpringsBack);
+    }
+
+    [Fact]
+    public void ReleaseIsTheFirstNotchAndNeverFills()
+    {
+        Assert.Equal(HandleZone.Travel, Handle.Zone(0, 10));
+        Assert.Equal(0f, Handle.StockValue(0));
+        Assert.Equal(HandleZone.Emergency, Handle.Zone(12, 0));
+    }
+
+    [Fact]
+    public void TheStockNotchesKeepTheirStockValues()
+    {
+        for (var stock = 0; stock < 12; stock++)
+        {
+            Assert.Equal(stock / 11f, Handle.StockValue(stock), 5);
+            Assert.Equal(stock, Handle.NotchFor(stock / 11f));
+        }
+        Assert.Equal(1f, Handle.StockValue(12));
+        Assert.Equal(0f, Handle.HandleValue(0f));
+        Assert.Equal(11 / 12f, Handle.HandleValue(1f), 5);
+    }
+}
+
 /// <summary>The S282's handle: running, lap, service, and emergency, with release added before running.</summary>
 public class ManualLapHandleTests
 {

@@ -137,16 +137,38 @@ public class TrainTests
     }
 
     [Fact]
-    public void AFillingStrokeHeldTooLongMakesTheFrontCarsDrag()
+    public void AFillingStrokeHeldLongLeavesNothingDragging()
     {
+        // A player's report (2026-10-28): a stroke or release held 20 s or more left the engine and front cars dragging,
+        // more and more as the overcharge came down. The distributors' overload limiter keeps it out of their memory.
         var rig = new Rig(20);
         rig.Service(1.5);
         rig.Run(60);
         rig.Valve.Position = DriverValvePosition.Fill;
         rig.Run(60);
         rig.Valve.Position = DriverValvePosition.Running;
-        rig.RunUntil(() => rig.Front.Distributor!.Applied, 60);
-        Assert.True(rig.Front.Distributor!.Applied, "the front car's overcharged control reservoir should apply it");
+        var applied = rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar > 0.05 || rig.Cars.Skip(1).Any(c => c.Distributor!.Applied), 360);
+        Assert.True(double.IsNaN(applied), $"a brake came on {applied:F0} s after the stroke");
+    }
+
+    [Fact]
+    public void ABrakeMadeWhileAnOverchargeComesDownReleasesFully()
+    {
+        // The same report's other half: braking again within the overcharge's four minutes left the train dragging after the release.
+        var rig = new Rig(20);
+        rig.Service(1.5);
+        rig.Run(60);
+        rig.Valve.Position = DriverValvePosition.Fill;
+        rig.Run(10);
+        rig.Valve.Position = DriverValvePosition.Running;
+        rig.Run(30);
+        rig.Service(0.5);
+        rig.Run(40);
+        Assert.InRange(rig.Rear.CylinderGauge / Air.Bar, 1.1, 1.4);
+        rig.Valve.Position = DriverValvePosition.Running;
+        rig.Run(180);
+        Assert.InRange(rig.Engine.Cylinder.GaugeBar, 0, 0.05);
+        Assert.All(rig.Cars.Skip(1), c => Assert.InRange(c.CylinderGauge / Air.Bar, 0, 0.05));
     }
 }
 
@@ -269,8 +291,9 @@ public class ReviewRegressionTests
         var car = new CarBrake(20, Rig.Geometry, locomotive: engine);
         car.PipeSection.Pressure = Air.Atmosphere;
         engine.MainReservoir.Pressure = Air.Atmosphere;
-        engine.Distributor.Restore(Air.FromAbsoluteBar(6), Air.Atmosphere, Air.Atmosphere, Air.Atmosphere);
+        // The adapter starts the distributor's pilot where the engine's cylinders stand.
         engine.Cylinder.Pressure = Air.FromAbsoluteBar(4.5);
+        engine.Distributor.Restore(Air.FromAbsoluteBar(6), Air.Atmosphere, engine.Cylinder.Pressure, Air.Atmosphere);
         var line = new BrakeLine(new[] { car }, Rig.Geometry);
         for (var i = 0; i < 60 * 10; i++)
             line.Advance(1 / 60.0);
@@ -289,7 +312,7 @@ public class BailOffTests
         var applied = rig.Engine.Cylinder.GaugeBar;
         Assert.InRange(applied, 1.8, 2.2);
         Assert.True(rig.Engine.BailOff() > 0);
-        // The engine's cylinders release through their exhaust in about 15 s to a trace.
+        // The engine's cylinders release through the relay's exhaust in about 4 s.
         rig.Run(40);
         Assert.InRange(rig.Engine.Cylinder.GaugeBar, 0, 0.05);
         Assert.InRange(rig.Rear.CylinderGauge / Air.Bar, 1.8, 2.2);
@@ -330,6 +353,42 @@ public class BailOffTests
         rig.Run(120);
         rig.Line.Advance(0);
         Assert.True(double.IsPositiveInfinity(rig.Line.ChangeRate));
+    }
+
+    [Fact]
+    public void TheIndependentReleasesQuicklyAndTheAutomaticAtThePassengerTime()
+    {
+        var rig = new Rig(0);
+        rig.Engine.Independent = 1;
+        rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar > 3.79, 30);
+        rig.Engine.Independent = 0;
+        var independent = rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar < 0.4, 60);
+        Assert.InRange(independent, 3, 5);
+
+        // The automatic brake follows the distributor's pilot: UIC 543's Passenger release, 15–20 s from full to 0.4 bar.
+        rig.Service(1.5);
+        rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar > 3.6, 30);
+        rig.Run(10);
+        rig.Valve.Position = DriverValvePosition.Running;
+        var automatic = rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar < 0.4, 60);
+        Assert.InRange(automatic, 15, 20);
+    }
+
+    [Fact]
+    public void ABailOverAPartialReleaseDoesntApplyTheEngineAgain()
+    {
+        // The pilot comes down slower than the relay: the bail must come down with it, not with the demand.
+        var rig = new Rig(5, BrakingMode.Passenger);
+        rig.Service(1.5);
+        rig.Run(20);
+        rig.Engine.BailOff();
+        rig.Run(10);
+        rig.Service(0.6);
+        var reapplied = rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar > 0.1, 40);
+        Assert.True(double.IsNaN(reapplied), $"the engine applied again {reapplied:F1} s into the partial release");
+        rig.Valve.Position = DriverValvePosition.Running;
+        reapplied = rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar > 0.1, 60);
+        Assert.True(double.IsNaN(reapplied), $"the engine applied again {reapplied:F1} s into the release");
     }
 
     [Fact]

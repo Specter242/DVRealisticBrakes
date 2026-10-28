@@ -105,8 +105,9 @@ namespace RealisticBrakes.Sim
                 var engine = new LocomotiveBrake(spec, system.hasTrainBrake ? new DriverBrakeValve(valveSpec) : null);
                 brake = new CarBrake(length, geometry, locomotive: engine);
                 engine.MainReservoir.Pressure = Pa(MainReservoirUnsmoothed(system));
-                engine.Distributor.Restore(Pa(system.controlReservoirPressure), Mathf.Max(system.auxReservoirPressure, pipePressure) * Air.Bar, Air.Atmosphere, pipe);
+                // The distributor's cylinder is the relay's pilot: it starts where the engine's cylinders stand, so they hold as they were.
                 engine.Cylinder.Pressure = Pa(Mathf.Max(1f, system.brakeCylinderPressureUnsmoothed));
+                engine.Distributor.Restore(Pa(system.controlReservoirPressure), Mathf.Max(system.auxReservoirPressure, pipePressure) * Air.Bar, engine.Cylinder.Pressure, pipe);
                 engine.DriverValve?.ChargeTo(pipe);
             }
             else if (system.brakeCylinderPressureCalculation == BrakeSystem.BrakeCylinderPressureCalculation.Regular)
@@ -282,6 +283,9 @@ namespace RealisticBrakes.Sim
                 valve.CutIn = bs.trainBrakeCutout;
                 var handle = bs.trainBrakePosition;
                 // A widened handle's added notches: a diesel's filling stroke or a steam engine's release (the H-6's), main reservoir air straight into the pipe; a diesel's emergency.
+                // A diesel's handle widened before a switch to American equipment, or another player's, keeps its stroke's notch: the 26-L has none, so it reads as release.
+                if (zone == HandleZone.Fill && bs.selfLappingController && !valve.Spec.FillingStroke)
+                    zone = HandleZone.Travel;
                 if (zone == HandleZone.Fill)
                     valve.Position = DriverValvePosition.Fill;
                 else if (zone == HandleZone.Emergency)

@@ -299,7 +299,7 @@ public class AarTrainTests
 public class AmericanDriverValveTests
 {
     [Fact]
-    public void ReleaseHeldTooLongOverchargesTheCarsAndRunningAppliesThem()
+    public void ReleaseHeldLongOverchargesTheCarsAndRunningLetsItDownWithoutApplyingThem()
     {
         var engine = new LocomotiveBrake(new LocomotiveBrakeSpec { MainReservoirVolume = 2.0 }, new DriverBrakeValve(DriverBrakeValveSpec.American()));
         var g = Rig.Geometry;
@@ -317,11 +317,54 @@ public class AmericanDriverValveTests
             line.Advance(1 / 60.0);
         }
         Assert.True(cars[^1].ControlValve!.AuxiliaryReservoir.GaugeBar > 5.5, "the reservoirs should have charged over running");
-        // No overcharge to let down on an American valve: running drops the pipe at once.
-        Assert.Equal(0, engine.DriverValve.OverchargeLeft);
+        // The H-6's running only feeds: what release put in bleeds away, and the reservoirs follow it down
+        // (a player's report, 2026-10-28: dropped at once, it applied the train in emergency).
+        Assert.InRange(engine.DriverValve.OverchargeLeft / Air.Bar, 0.9, 1.0);
         engine.DriverValve.Position = DriverValvePosition.Running;
-        for (var i = 0; i < 60 * 10; i++)
+        for (var i = 0; i < 60 * 720; i++)
+        {
+            engine.CompressorFlow = engine.MainReservoir.Pressure < Air.FromAbsoluteBar(9) ? Rig.FreeAir(100) : 0;
             line.Advance(1 / 60.0);
-        Assert.Contains(cars.Skip(1), c => c.ControlValve!.Applied);
+            Assert.DoesNotContain(cars.Skip(1), c => c.ControlValve!.Applied);
+        }
+        Assert.InRange(cars[^1].PipeSection.GaugeBar, 4.98, 5.02);
+        Assert.InRange(cars[^1].ControlValve!.AuxiliaryReservoir.GaugeBar, 4.95, 5.1);
+    }
+
+    [Fact]
+    public void ReleaseThenLapThenRunningStillLetsItDown()
+    {
+        // The handle passes running into lap: the overcharge stands with the equalizing reservoir, and running lets it down from there.
+        var engine = new LocomotiveBrake(new LocomotiveBrakeSpec { MainReservoirVolume = 2.0 }, new DriverBrakeValve(DriverBrakeValveSpec.American()));
+        var g = Rig.Geometry;
+        var cars = new List<CarBrake> { new(20, g, locomotive: engine) };
+        for (var i = 0; i < 10; i++)
+            cars.Add(new CarBrake(15, g, new AarControlValve()));
+        foreach (var c in cars)
+            c.ChargeTo(Air.FromGaugeBar(5));
+        engine.MainReservoir.Pressure = Air.FromAbsoluteBar(9);
+        var line = new BrakeLine(cars, g);
+        void Run(double seconds)
+        {
+            for (var i = 0; i < 60 * seconds; i++)
+            {
+                engine.CompressorFlow = engine.MainReservoir.Pressure < Air.FromAbsoluteBar(9) ? Rig.FreeAir(100) : 0;
+                line.Advance(1 / 60.0);
+                Assert.DoesNotContain(cars.Skip(1), c => c.ControlValve!.Applied);
+            }
+        }
+        engine.DriverValve!.Position = DriverValvePosition.Fill;
+        Run(30);
+        engine.DriverValve.Position = DriverValvePosition.Lap;
+        Run(20);
+        engine.DriverValve.Position = DriverValvePosition.Running;
+        Run(120);
+    }
+
+    [Fact]
+    public void TheAmericanValveHasNoFillingStroke()
+    {
+        Assert.False(DriverBrakeValveSpec.American().FillingStroke);
+        Assert.True(DriverBrakeValveSpec.Uic().FillingStroke);
     }
 }

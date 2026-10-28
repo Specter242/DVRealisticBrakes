@@ -55,7 +55,8 @@ they fill ten times as fast as real ones.
     quickly. It starts once you've held the handle there for 0.4
     seconds (a quick scroll past release does nothing), and the handle
     springs back to release when you let go. Holding the brake-release key
-    or turning the wheel on works too.
+    or turning the wheel on works too. American equipment has no filling
+    stroke, as the real 26-L valve has none.
   - **Past full service** is **emergency**. It stays until you move it
     back.
 
@@ -65,8 +66,9 @@ they fill ten times as fast as real ones.
   and emergency.
   - **Release**, one notch before running, is new. It feeds the main
     reservoir straight into the pipe to release a long train quickly. It
-    stays where you leave it, as on the real valve, so bring it back to
-    running before the train overcharges.
+    stays where you leave it, as on the real valve. Left there, it
+    overcharges the train, and running then lets the extra pressure down
+    over a few minutes.
   - In **service** the equalizing reservoir comes down while you hold the
     handle there. Move to **lap** when it reaches the reduction you want,
     and the pipe follows and holds.
@@ -103,6 +105,9 @@ they fill ten times as fast as real ones.
   a cut on a grade needs several: about one car in three on 1 %. A cut that
   can't hold rolls. Cars the game spawns or loads get enough hand brakes
   set to stay put.
+- **The independent brake** applies in about 3 seconds and lets off in
+  about 4. The engine's train brake lets off at a passenger brake's pace,
+  about 18 seconds.
 - **Bailing off:** with the train brake applied, click the independent
   brake lever (in VR, hold it and press the trigger). The engine's own
   brakes let go, and the train's stay on. Engines joined by MU cable bail
@@ -128,8 +133,10 @@ A setting chooses the cars' equipment. **European** is the default.
   - An emergency adds each car's emergency reservoir, about a fifth more
     braking, and vents the pipe at every car, so it runs down the train
     fast. The pipe can't be recharged until about a minute has passed.
-  - Holding the steam engines' handle in release too long overcharges the
-    cars' reservoirs, and they apply when you go back to running.
+  - Holding the steam engines' handle in release overcharges the cars'
+    reservoirs. Back in running, the extra pressure bleeds away over up to
+    ten minutes, and the brakes stay off. Brake in that time and the
+    application comes on harder than usual.
 
 ## Loaded and empty cars
 
@@ -158,8 +165,9 @@ not to slide their wheels. A setting turns this off.
 ## Compatibility
 
 - **Leak Down:** works.
-- **Realistic Firing:** its air pumps work. While this mod runs the brake,
-  this mod handles a click on the independent lever to bail off.
+- **Realistic Firing:** use 1.16.2 or newer, which leaves bailing off to
+  this mod; older versions also act on the click to bail off. Its air
+  pumps work.
 - **Valve 394, Self-Lapping Brakes, and other brake mods:** use one brake
   mod at a time. The log names any that replace the same parts.
 - **Multiplayer:** everyone in a session needs this mod. Guests use the

@@ -19,27 +19,39 @@ namespace RealisticBrakes.Core
     {
  public const double FillHoldTime = 0.4;
 
-        private WidenedHandle(int stockNotches, bool emergencyNotch, bool springsBack, double fillHold)
+        private WidenedHandle(int stockNotches, bool releaseNotch, bool emergencyNotch, bool springsBack, double fillHold)
         {
             if (stockNotches < 2)
                 throw new ArgumentOutOfRangeException(nameof(stockNotches), stockNotches, "a handle has at least two notches");
             StockNotches = stockNotches;
+            ReleaseNotch = releaseNotch;
             EmergencyNotch = emergencyNotch;
             SpringsBack = springsBack;
             FillHold = fillHold;
         }
 
-        /// <summary>A diesel's self-lapping handle of <paramref name="stockNotches"/> notches: a sprung filling stroke and emergency added.</summary>
-        public static WidenedHandle SelfLapping(int stockNotches) => new WidenedHandle(stockNotches, true, true, FillHoldTime);
+        /// <summary>
+        /// A diesel's self-lapping handle of <paramref name="stockNotches"/>
+        /// notches: emergency added, and a sprung filling stroke if the valve
+        /// has one (<paramref name="fillingStroke"/>).
+        /// </summary>
+        public static WidenedHandle SelfLapping(int stockNotches, bool fillingStroke = true) =>
+            new WidenedHandle(stockNotches, fillingStroke, true, fillingStroke, FillHoldTime);
 
         /// <summary>A steam engine's manual-lap handle of <paramref name="stockNotches"/> notches: release added, where it stays.</summary>
-        public static WidenedHandle ManualLap(int stockNotches) => new WidenedHandle(stockNotches, false, false, 0);
+        public static WidenedHandle ManualLap(int stockNotches) => new WidenedHandle(stockNotches, true, false, false, 0);
 
         /// <summary>The stock handle's notches.</summary>
         public int StockNotches { get; }
 
         /// <summary>The widened handle's notches.</summary>
-        public int Notches => StockNotches + 1 + (EmergencyNotch ? 1 : 0);
+        public int Notches => StockNotches + First + (EmergencyNotch ? 1 : 0);
+
+        /// <summary>Whether a notch is added before release: a diesel's filling stroke, or a steam engine's release.</summary>
+        public bool ReleaseNotch { get; }
+
+        // The first stock notch: after the added release notch, if there is one.
+        private int First => ReleaseNotch ? 1 : 0;
 
         /// <summary>Whether a notch is added past full service, for emergency.</summary>
         public bool EmergencyNotch { get; }
@@ -52,22 +64,22 @@ namespace RealisticBrakes.Core
 
         /// <summary>Where <paramref name="notch"/> stands, held past the stock travel for <paramref name="heldPastRelease"/> s.</summary>
         public HandleZone Zone(int notch, double heldPastRelease) =>
-            notch <= 0 ? (heldPastRelease >= FillHold ? HandleZone.Fill : HandleZone.Travel)
+            ReleaseNotch && notch <= 0 ? (heldPastRelease >= FillHold ? HandleZone.Fill : HandleZone.Travel)
             : EmergencyNotch && notch >= Notches - 1 ? HandleZone.Emergency
             : HandleZone.Travel;
 
         /// <summary>The stock value, 0 to 1, of <paramref name="notch"/>: the new notches read as their stock neighbors.</summary>
-        public float StockValue(int notch) => Clamp01((notch - 1) / (float)(StockNotches - 1));
+        public float StockValue(int notch) => Clamp01((notch - First) / (float)(StockNotches - 1));
 
         /// <summary>
         /// Where on the widened handle's travel, 0 to 1, a stock
         /// <paramref name="value"/> puts it: among the stock notches, never in
         /// the new ones.
         /// </summary>
-        public float HandleValue(float value) => (1 + Clamp01(value) * (StockNotches - 1)) / (Notches - 1);
+        public float HandleValue(float value) => (First + Clamp01(value) * (StockNotches - 1)) / (Notches - 1);
 
         /// <summary>The nearest notch to a stock <paramref name="value"/>.</summary>
-        public int NotchFor(float value) => 1 + (int)Math.Round(Clamp01(value) * (StockNotches - 1));
+        public int NotchFor(float value) => First + (int)Math.Round(Clamp01(value) * (StockNotches - 1));
 
         private static float Clamp01(float value) => value < 0 ? 0 : value > 1 ? 1 : value;
     }

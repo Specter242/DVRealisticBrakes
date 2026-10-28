@@ -56,6 +56,19 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double ControlFollowSeconds { get; set; } = 15;
 
+        /// <summary>
+        /// The most the control reservoir charges to, gauge Pa: the pipe's
+        /// 5 bar working pressure. A distributor's overload limiter keeps a
+        /// pipe held over it (a filling stroke, a release held long) from
+        /// overcharging its reference, which "could, in subsequent braking,
+        /// lead to over-application of the brakes and to subsequent
+        /// difficulties in releasing" (Sab Wabco, EP0797521). Without it, a
+        /// stroke held for 20 s, or a brake made while a stroke's overcharge
+        /// was still coming down, left cars and engines dragging after the
+        /// release (a player's report, 2026-10-28).
+        /// </summary>
+        public double ControlReservoirLimit { get; set; } = 5.0 * Air.Bar;
+
         /// <summary>The pipe must come back within this of the control reservoir for the valve to release fully, Pa (inferred).</summary>
         public double ReleaseThreshold { get; set; } = 0.05 * Air.Bar;
 
@@ -325,7 +338,7 @@ namespace RealisticBrakes.Core
             }
             else
             {
-                ChargeFlow += Math.Max(0, controlCharging.Pass(pipe, ControlReservoir, dt)) / dt;
+                ChargeFlow += Math.Max(0, controlCharging.Pass(pipe, ControlReservoir, dt, Air.Atmosphere + spec.ControlReservoirLimit)) / dt;
                 TargetCylinder = 0;
                 exhausted += SetCylinder(Air.Atmosphere, dt);
                 exhausted += spec.QuickService.Vent(QuickServiceChamber, dt);

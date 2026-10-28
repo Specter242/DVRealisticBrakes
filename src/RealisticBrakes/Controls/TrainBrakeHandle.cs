@@ -193,10 +193,13 @@ namespace RealisticBrakes.Controls
             var spec = control.GetComponent<Lever>();
             if (spec == null || !spec.useSteppedJoint || !spec.steppedValueUpdate || !spec.useLimits || spec.notches < 2)
                 return;
-            var layout = system.selfLappingController ? WidenedHandle.SelfLapping(spec.notches) : WidenedHandle.ManualLap(spec.notches);
+            // The American 26-L has no filling stroke (DriverBrakeValveSpec.FillingStroke); the equipment is read as the cab loads.
+            var layout = system.selfLappingController
+                ? WidenedHandle.SelfLapping(spec.notches, fillingStroke: Main.Settings.Equipment != Equipment.American)
+                : WidenedHandle.ManualLap(spec.notches);
             var step = (spec.jointLimitMax - spec.jointLimitMin) / (spec.notches - 1);
             // Value 0, release, is at the joint's lower limit, or its upper on an inverted lever.
-            var atRelease = step;
+            var atRelease = layout.ReleaseNotch ? step : 0f;
             var atFull = layout.EmergencyNotch ? step : 0f;
             var min = spec.jointLimitMin - (spec.invertDirection ? atFull : atRelease);
             var max = spec.jointLimitMax + (spec.invertDirection ? atRelease : atFull);
@@ -214,7 +217,7 @@ namespace RealisticBrakes.Controls
                 spec.innerLimitMinNotch = 1;
                 spec.innerLimitMaxNotch = layout.Notches - 1;
             }
-            else if (spec.useInnerLimitSpring)
+            else if (spec.useInnerLimitSpring && layout.ReleaseNotch)
             {
                 // A handle's own spring zone, counted from release, moves with the notch added there.
                 spec.innerLimitMinNotch++;

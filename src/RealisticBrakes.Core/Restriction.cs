@@ -35,10 +35,20 @@ namespace RealisticBrakes.Core
         /// and <paramref name="b"/> for <paramref name="dt"/> s, never past
         /// level. Returns the mass moved from a to b, kg.
         /// </summary>
-        public double Pass(Chamber a, Chamber b, double dt)
+        public double Pass(Chamber a, Chamber b, double dt) => Pass(a, b, dt, double.PositiveInfinity);
+
+        /// <summary>
+        /// Moves air between <paramref name="a"/> and <paramref name="b"/> as
+        /// <see cref="Pass(Chamber, Chamber, double)"/> does, but never fills
+        /// b past <paramref name="ceiling"/> Pa; it can still empty back into
+        /// a. Returns the mass moved from a to b, kg.
+        /// </summary>
+        public double Pass(Chamber a, Chamber b, double dt, double ceiling)
         {
             var moved = Conductance * (a.Pressure - b.Pressure) * dt;
             moved = Flows.LimitTo(moved, a.MassToEqualize(b));
+            if (moved > 0)
+                moved = Math.Min(moved, Math.Max(0, b.MassToReach(ceiling)));
             Flows.Move(a, b, moved);
             return moved;
         }

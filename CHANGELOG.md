@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 (2026-10-28)
+
+- Holding a steam engine's release or a diesel's filling stroke no longer
+  leaves the brakes dragging once the handle is back in running, and
+  braking soon after a filling stroke releases fully again.
+- American equipment: coming back from a steam engine's release no longer
+  sets off an emergency, and the diesels have no filling stroke, as the
+  real 26-L valve has none.
+- The independent brake lets off in about 4 seconds instead of 20.
+
 ## 1.0.0 (2026-10-27)
 
 First release.

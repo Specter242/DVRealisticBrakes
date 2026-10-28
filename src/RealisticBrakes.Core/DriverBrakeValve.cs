@@ -73,6 +73,10 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double OverchargeLetDown { get; set; } = 0.4 * Air.Bar / 240;
 
+ public bool LetsDownRelease { get; set; }
+
+ public bool FillingStroke { get; set; } = true;
+
         /// <summary>The equalizing reservoir's charging port from the main reservoir.</summary>
         public Orifice EqualizingCharge { get; set; } = new Orifice(1.2);
 
@@ -103,14 +107,20 @@ namespace RealisticBrakes.Core
         /// <summary>
         /// An American valve (the 26-L self-lapping, or the H-6 of the 6-ET's
         /// Release, Running, Lap, Service, and Emergency): release feeds main
-        /// reservoir air straight in and leaves no overcharge to let down, so
-        /// staying in release too long overcharges the cars' reservoirs, and
-        /// they apply when the pipe comes back to running. Its first service
-        /// notch is a 0.45 bar minimum reduction: lighter, the pipe's rebound
-        /// along a long train released most of its cars (a second review,
+        /// reservoir air straight in, and running lets what it put in bleed
+        /// away slowly, so the cars' reservoirs follow it down without
+        /// applying. The 26-L has no filling stroke. Its first service notch
+        /// is a 0.45 bar minimum reduction: lighter, the pipe's rebound along
+        /// a long train released most of its cars (a second review,
         /// 2026-10-24).
         /// </summary>
-        public static DriverBrakeValveSpec American() => new DriverBrakeValveSpec { Overcharge = 0, MinimumReduction = 0.45 * Air.Bar };
+        public static DriverBrakeValveSpec American() => new DriverBrakeValveSpec
+        {
+            Overcharge = 0,
+            MinimumReduction = 0.45 * Air.Bar,
+            LetsDownRelease = true,
+            FillingStroke = false,
+        };
     }
 
     /// <summary>
@@ -160,7 +170,7 @@ namespace RealisticBrakes.Core
                 switch (Position)
                 {
                     case DriverValvePosition.Fill:
-                        return running + spec.Overcharge;
+                        return running + Math.Max(spec.Overcharge, OverchargeLeft);
                     case DriverValvePosition.Service:
                         return running - Math.Max(spec.MinimumReduction, Math.Min(spec.FullService, ServiceReduction));
                     case DriverValvePosition.Emergency:
@@ -175,7 +185,8 @@ namespace RealisticBrakes.Core
         }
 
         /// <summary>Sets the overcharge still to let down, Pa, as saved.</summary>
-        public void RestoreOvercharge(double overcharge) => OverchargeLeft = Math.Max(0, Math.Min(spec.Overcharge, overcharge));
+        public void RestoreOvercharge(double overcharge) =>
+            OverchargeLeft = Math.Max(0, Math.Min(Math.Max(spec.Overcharge, spec.LetsDownRelease ? spec.FillLimit : 0), overcharge));
 
         /// <summary>Charges the equalizing reservoir to running, as on an engine found charged.</summary>
         public void ChargeTo(double pressure)
@@ -192,13 +203,26 @@ namespace RealisticBrakes.Core
             if (!CutIn)
                 return;
 
+            var running = Air.Atmosphere + spec.Running;
+            var er = EqualizingReservoir;
             switch (Position)
             {
                 case DriverValvePosition.Fill:
-                    OverchargeLeft = spec.Overcharge;
+                    if (spec.LetsDownRelease)
+                    {
+                        // The equalizing reservoir charges with the pipe, so running lets down what release put in from where it stands.
+                        spec.FillPort.PassOneWay(pipe, er, dt, running + spec.FillLimit);
+                        OverchargeLeft = Math.Max(spec.Overcharge, Math.Min(spec.FillLimit, er.Pressure - running));
+                    }
+                    else
+                        OverchargeLeft = spec.Overcharge;
                     break;
                 case DriverValvePosition.Running:
                     OverchargeLeft = Math.Max(0, OverchargeLeft - spec.OverchargeLetDown * dt);
+                    break;
+                case DriverValvePosition.Lap when spec.LetsDownRelease:
+                    // Lapped, an overcharge stands with the equalizing reservoir, and running lets it down from there.
+                    OverchargeLeft = Math.Max(0, Math.Min(spec.FillLimit, er.Pressure - running));
                     break;
                 default:
                     OverchargeLeft = 0;
@@ -206,7 +230,6 @@ namespace RealisticBrakes.Core
             }
 
             var target = EqualizingTarget;
-            var er = EqualizingReservoir;
             if (er.Pressure < target)
                 spec.EqualizingCharge.PassOneWay(mainReservoir, er, dt, target);
             else if (er.Pressure > target)
