@@ -45,6 +45,11 @@ The game's **Main Reservoir Fill Time** (in the session settings) speeds up
 only the engines' air pumps, as in the stock game. At the default **100 %**
 they fill ten times as fast as real ones.
 
+A steam engine's air pump takes about the steam a real pump of its time
+took for the air it makes, a fifth of what the stock S282's and S060's
+pumps took, since a train's real reservoirs keep it running for minutes
+while they recharge.
+
 ## Driving
 
 - **Self-lapping handles** (the diesels): move the handle as before. Each

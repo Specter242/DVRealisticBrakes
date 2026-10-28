@@ -2,7 +2,7 @@
   "Id": "RealisticBrakes",
   "DisplayName": "Realistic Brakes",
   "Author": "Specter242",
-  "Version": "1.0.1",
+  "Version": "1.0.2",
   "ManagerVersion": "0.28.2",
   "AssemblyName": "RealisticBrakes.dll",
   "EntryMethod": "RealisticBrakes.Main.Load",

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Reflection;
 using DV.Simulation.Brake;
 using HarmonyLib;
+using LocoSim.Definitions;
+using LocoSim.Implementations;
 
 namespace RealisticBrakes.AdapterCheck
 {
@@ -72,6 +74,7 @@ namespace RealisticBrakes.AdapterCheck
             CheckSaveRoundTrip();
             CheckBailClick();
             CheckSettingDefaults();
+            CheckPumpSteam();
 
             // Apply every patch as the mod does, then take them off again.
             var harmony = new Harmony("RealisticBrakes.AdapterCheck");
@@ -204,8 +207,9 @@ namespace RealisticBrakes.AdapterCheck
                   && typeof(Patches.WidenedHandleSetPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && typeof(Patches.CarControlsPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && typeof(Patches.BenchSpawnerPatch).IsDefined(typeof(OptionalPatchAttribute), false)
+                  && typeof(Patches.AirPumpSteamPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && !typeof(Patches.BrakesetTickPatch).IsDefined(typeof(OptionalPatchAttribute), false),
-                "only the cab controls' patches are optional; the brake's own patches stand or fall together");
+                "only the cab controls' and the air pumps' steam patches are optional; the brake's own patches stand or fall together");
         }
 
         private static void CheckSettingDefaults()
@@ -215,6 +219,75 @@ namespace RealisticBrakes.AdapterCheck
             Check(!settings.ShowOverlay && !settings.ManualEmptyLoaded
                   && !manual.GetCustomAttributes(true).Any(a => a.GetType().Name == "DrawAttribute"),
                 "a new install starts with the pressure overlay off and the empty/loaded lever automatic, its by-hand switch not in the menu");
+        }
+
+        private static void CheckPumpSteam()
+        {
+            var harmony = new Harmony("RealisticBrakes.AdapterCheck.PumpSteam");
+            var firing = new Harmony("RealisticBrakes.AdapterCheck.FiringStandIn");
+            var settings = AccessTools.Property(typeof(RealisticBrakes.Main), nameof(RealisticBrakes.Main.Settings));
+            var before = settings.GetValue(null);
+            try
+            {
+                harmony.CreateClassProcessor(typeof(Patches.AirPumpSteamPatch)).Patch();
+                firing.Patch(AccessTools.Method(typeof(SteamCompressor), nameof(SteamCompressor.Tick)),
+                    postfix: new HarmonyMethod(typeof(Program), nameof(FiringStandIn)));
+                settings.SetValue(null, new Settings());
+                var stock = NewS060Pump(20f, out var stockSteam);
+                firingPump = NewS060Pump(18.4f, out var firingSteam);
+                Run(stock, firingPump);
+                var limited = stockSteam.Value;
+                var kept = firingSteam.Value;
+                RealisticBrakes.Main.Settings.Enabled = false;
+                var off = NewS060Pump(20f, out var offSteam);
+                Run(off);
+                var most = 20f * Patches.AirPumpSteamPatch.SteamPerAir;
+                Check(Math.Abs(limited - most) < 0.002f && Math.Abs(kept - 0.18f) < 0.001f && Math.Abs(offSteam.Value - 1f) < 0.01f,
+                    $"the S060's air pump flat out takes {limited:F3} kg/s of steam ({most:F3} for its 20 L/s; the game's {offSteam.Value:F2} with the " +
+                    $"model off); one another mod sets after keeps its {kept:F3}");
+            }
+            finally
+            {
+                harmony.UnpatchAll(harmony.Id);
+                firing.UnpatchAll(firing.Id);
+                settings.SetValue(null, before);
+                firingPump = null;
+            }
+        }
+
+        private static SteamCompressor firingPump;
+
+        // Realistic Firing's AirPumpPatch on the pump it fitted: its share of its full rate times its 0.18 kg/s.
+        private static void FiringStandIn(SteamCompressor __instance)
+        {
+            if (__instance == firingPump)
+                __instance.steamConsumptionReadOut.Value = UnityEngine.Mathf.Clamp01(__instance.productionRateNormalizedReadOut.Value) * 0.18f;
+        }
+
+        // The S060's pump (the game's: 20 bar·L/s, 1 kg/s of steam flat out at 3 bar), at 14 bar of steam, governor on, the
+        // main reservoir half full; its air as given.
+        private static SteamCompressor NewS060Pump(float air, out Port steam)
+        {
+            var def = new SteamCompressorDefinition { ID = "compressor", maxProductionRate = air, maxSteamConsumption = 1f, pressureForMaxProduction = 3f };
+            var pump = (SteamCompressor)def.InstantiateImplementation();
+            pump.SetGameParams(new SimGameParams(false, false, false, 1f, 1f));
+            void Wire(PortReferenceDefinition reference, PortValueType type, float value) =>
+                pump.GetAllPortReferences().Single(r => r.id == $"{def.ID}.{reference.ID}")
+                    .SetPortReference(new Port(reference.ID.ToLowerInvariant(), new PortDefinition(PortType.READONLY_OUT, type, "OUT"), value));
+            Wire(def.compressorControl, PortValueType.CONTROL, 1f);
+            Wire(def.steamPressure, PortValueType.PRESSURE, 14f);
+            pump.GetAllPorts().Single(p => p.id == $"{def.ID}.{def.activationSignalExtIn.ID}").ExternalValueUpdate(1f);
+            pump.GetAllPorts().Single(p => p.id == $"{def.ID}.{def.mainResPressureNormalizedExtIn.ID}").ExternalValueUpdate(0.5f);
+            steam = pump.GetAllPorts().Single(p => p.id == $"{def.ID}.{def.steamConsumptionReadOut.ID}");
+            return pump;
+        }
+
+        // 30 s of the game's ticks, past the pump's smoothing.
+        private static void Run(params SteamCompressor[] pumps)
+        {
+            for (var i = 0; i < 1500; i++)
+                foreach (var pump in pumps)
+                    pump.Tick(0.02f);
         }
 
         private static void Check(bool ok, string what)

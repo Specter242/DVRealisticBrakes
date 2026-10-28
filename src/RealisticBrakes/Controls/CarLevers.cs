@@ -543,6 +543,9 @@ namespace RealisticBrakes.Controls
 
         private ControlImplBase control;
 
+        // Whether the lever has been turned to its valve's setting since its joint was built.
+        private bool placed;
+
         private void Start()
         {
             control = GetComponent<ControlImplBase>();
@@ -561,7 +564,19 @@ namespace RealisticBrakes.Controls
             if (control == null || control.IsGrabbed() || !TryGetAir(out var air))
                 return;
             var notch = Notch(air);
-            if (notch >= 0 && notch != NotchOf(control.Value))
+            if (notch < 0)
+                return;
+            // A lever turns to a value only once its joint is built, a frame after it's enabled (LeverBase.Initialize): set before
+            // that, it kept the value but stood at its first notch. Its row is fitted anew each time the player comes back near the
+            // car, so the levers looked reset (GenerousMediaPlayer, 2026-10-28: they "come to the initial position" a few meters away).
+            if (!placed)
+            {
+                if (GetComponent<HingeJoint>() == null)
+                    return;
+                placed = true;
+                control.SetValue(notch / (float)(Notches - 1));
+            }
+            else if (notch != NotchOf(control.Value))
                 control.SetValue(notch / (float)(Notches - 1));
         }
 

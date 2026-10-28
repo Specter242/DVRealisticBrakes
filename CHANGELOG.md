@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2 (2026-10-28)
+
+- A car's levers keep showing their setting when you walk away and come
+  back, instead of jumping to their first position.
+- Steam engines' stock air pumps take about the steam a real pump of their
+  time did, a fifth of what they took, so recharging a train no longer
+  drains the boiler. Realistic Firing's pumps are unchanged.
+
 ## 1.0.1 (2026-10-28)
 
 - Holding a steam engine's release or a diesel's filling stroke no longer

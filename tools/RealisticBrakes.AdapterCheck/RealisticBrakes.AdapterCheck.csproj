@@ -27,6 +27,7 @@
     <Reference Include="UnityModManager" HintPath="$(DvModManagerDir)/UnityModManager.dll" />
     <Reference Include="Assembly-CSharp" HintPath="$(DvManagedDir)/Assembly-CSharp.dll" />
     <Reference Include="DV.BrakeSystem" HintPath="$(DvManagedDir)/DV.BrakeSystem.dll" />
+    <Reference Include="DV.Simulation" HintPath="$(DvManagedDir)/DV.Simulation.dll" />
     <Reference Include="DV.ThingTypes" HintPath="$(DvManagedDir)/DV.ThingTypes.dll" />
     <Reference Include="DV.Utils" HintPath="$(DvManagedDir)/DV.Utils.dll" />
     <Reference Include="Newtonsoft.Json" HintPath="$(DvManagedDir)/Newtonsoft.Json.dll" />
