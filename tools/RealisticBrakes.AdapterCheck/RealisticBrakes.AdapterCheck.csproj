@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Contract check of the game adapter against the installed game's
+    assemblies, run under Mono by scripts/check-adapter.sh. Game assemblies
+    are copied to bin/ (gitignored) so Mono can load them; nothing here
+    touches Unity's native side.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/RealisticBrakes/RealisticBrakes.csproj" />
+    <ProjectReference Include="../../src/RealisticBrakes.Core/RealisticBrakes.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="0Harmony" HintPath="$(DvModManagerDir)/0Harmony.dll" />
+    <Reference Include="UnityModManager" HintPath="$(DvModManagerDir)/UnityModManager.dll" />
+    <Reference Include="Assembly-CSharp" HintPath="$(DvManagedDir)/Assembly-CSharp.dll" />
+    <Reference Include="DV.BrakeSystem" HintPath="$(DvManagedDir)/DV.BrakeSystem.dll" />
+    <Reference Include="DV.ThingTypes" HintPath="$(DvManagedDir)/DV.ThingTypes.dll" />
+    <Reference Include="DV.Utils" HintPath="$(DvManagedDir)/DV.Utils.dll" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(DvManagedDir)/Newtonsoft.Json.dll" />
+    <Reference Include="UnityEngine" HintPath="$(DvManagedDir)/UnityEngine.dll" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(DvManagedDir)/UnityEngine.CoreModule.dll" />
+    <Reference Include="UnityEngine.AudioModule" HintPath="$(DvManagedDir)/UnityEngine.AudioModule.dll" />
+    <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(DvManagedDir)/UnityEngine.ImageConversionModule.dll" />
+    <Reference Include="VRTK" HintPath="$(DvManagedDir)/VRTK.dll" />
+    <Reference Include="DV.CabControls.Spec" HintPath="$(DvManagedDir)/DV.CabControls.Spec.dll" />
+    <Reference Include="DV.Interaction" HintPath="$(DvManagedDir)/DV.Interaction.dll" />
+    <!-- Never another mod's assembly: the check loads every type of the mod without them, as the mod manager does. -->
+    <Reference Include="Unity.TextMeshPro" HintPath="$(DvManagedDir)/Unity.TextMeshPro.dll" />
+    <Reference Include="UnityEngine.UI" HintPath="$(DvManagedDir)/UnityEngine.UI.dll" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,23 @@
+# Changelog
+
+## 1.0.0 (2026-10-27)
+
+First release.
+
+- The air brake, car by car: every car has its own brake pipe, reservoirs,
+  and valve. Applications travel down the train, and long trains release
+  and recharge in minutes, in real time.
+- European (UIC) equipment by default, American (AB) by a setting.
+- The steam engines' and DM3's brake valves make and hold a reduction,
+  with an equalizing reservoir hand on the main reservoir gauge. The other
+  diesels' handles gain a filling stroke and emergency.
+- Car levers beside each bleed handle, with their positions printed round
+  them.
+- Freight cars brake with their own force.
+- Dead engines take their brakes' air from the train.
+- The bleed handle releases a car and keeps its air; holding it drains the
+  car.
+- Click the independent brake lever to bail off.
+- Hand brakes hold only what they can.
+- Multiplayer: the brake settings and controls sync through the host.
+- Saves keep each car's brake state.

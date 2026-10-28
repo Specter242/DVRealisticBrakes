@@ -1,0 +1,17 @@
+{
+  "Id": "RealisticBrakes",
+  "DisplayName": "Realistic Brakes",
+  "Author": "Specter242",
+  "Version": "1.0.0",
+  "ManagerVersion": "0.28.2",
+  "AssemblyName": "RealisticBrakes.dll",
+  "EntryMethod": "RealisticBrakes.Main.Load",
+  "LoadAfter": [
+    "DVCustomCarLoader",
+    "Multiplayer",
+    "RealisticFiring"
+  ],
+  "MultiplayerCompatibility": "All",
+  "HomePage": "https://www.nexusmods.com/derailvalley/mods/1798",
+  "Repository": "https://raw.githubusercontent.com/Specter242/DVRealisticBrakes/main/repository.json"
+}

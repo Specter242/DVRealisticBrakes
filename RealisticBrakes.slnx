@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RealisticBrakes.Core/RealisticBrakes.Core.csproj" />
+    <Project Path="src/RealisticBrakes/RealisticBrakes.csproj" />
+    <Project Path="src/RealisticBrakes.Multiplayer/RealisticBrakes.Multiplayer.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/RealisticBrakes.AdapterCheck/RealisticBrakes.AdapterCheck.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RealisticBrakes.Core.Tests/RealisticBrakes.Core.Tests.csproj" />
+  </Folder>
+</Solution>
