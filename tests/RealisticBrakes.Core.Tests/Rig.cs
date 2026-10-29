@@ -12,9 +12,12 @@ internal sealed class Rig
 
     public static readonly PipeGeometry Geometry = PipeGeometry.Uic();
 
-    public Rig(int cars, BrakingMode mode = BrakingMode.Goods, bool charged = true, double carLength = 15, bool american = false)
+    public Rig(int cars, BrakingMode mode = BrakingMode.Goods, bool charged = true, double carLength = 15, bool american = false,
+        LocomotiveBrakeSpec? engine = null, DriverBrakeValveSpec? driver = null)
     {
-        Engine = new LocomotiveBrake(new LocomotiveBrakeSpec { MainReservoirVolume = 2.0 }, new DriverBrakeValve());
+        engine ??= new LocomotiveBrakeSpec();
+        engine.MainReservoirVolume = 2.0;
+        Engine = new LocomotiveBrake(engine, new DriverBrakeValve(driver));
         var all = new List<CarBrake> { new(20, Geometry, locomotive: Engine) };
         for (var i = 0; i < cars; i++)
             all.Add(new CarBrake(carLength, Geometry, american ? new AarControlValve() : new UicDistributor { Mode = mode }));

@@ -31,6 +31,16 @@ namespace RealisticBrakes.Core.Tests;
         Assert.InRange(Deceleration(Loaded, LoadSetting.Empty), 0.25, 0.3);
 
     [Fact]
+    public void APeriodCarBrakesWithItsEmptyForceAtFullPressure()
+    {
+        // No empty/load equipment: full service at full pressure, and rigging sized to the light weight (ICS pp. 2, 245).
+        Assert.Equal(1, Hopper.ForceMultiplier(1, 0, Empty, Hopper.PeriodLeverage), 6);
+        Assert.Equal(Empty / Loaded, Hopper.ForceMultiplier(1, 0, Loaded, Hopper.PeriodLeverage), 6);
+        // The hand brake stays the game's.
+        Assert.Equal(Hopper.ForceMultiplier(0, 1, Loaded), Hopper.ForceMultiplier(0, 1, Loaded, Hopper.PeriodLeverage), 6);
+    }
+
+    [Fact]
     public void TheLeverBelongsAtLoadedFromHalfwayUp()
     {
         Assert.Equal(LoadSetting.Empty, Hopper.SettingFor(Empty));

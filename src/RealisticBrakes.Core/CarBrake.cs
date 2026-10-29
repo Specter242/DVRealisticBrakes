@@ -76,6 +76,7 @@ namespace RealisticBrakes.Core
             {
                 Locomotive.Distributor.ChargeTo(pressure);
                 Locomotive.DriverValve?.ChargeTo(pressure);
+                Locomotive.HeldAutomatic = 0;
                 if (Locomotive.MainReservoir.Pressure < pressure)
                     Locomotive.MainReservoir.Pressure = pressure;
             }

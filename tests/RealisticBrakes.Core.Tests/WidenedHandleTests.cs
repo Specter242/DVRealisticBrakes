@@ -147,3 +147,46 @@ public class ManualLapHandleTests
         Assert.Equal(1f, Handle.HandleValue(1f), 5);
     }
 }
+
+/// <summary>The S282's handle on American equipment: the H-6's release, running, holding, lap, service, and emergency.</summary>
+public class HoldingHandleTests
+{
+    private static readonly WidenedHandle Handle = WidenedHandle.ManualLap(4, holding: true);
+
+    [Fact]
+    public void ItGainsReleaseAndHolding()
+    {
+        Assert.Equal(6, Handle.Notches);
+        Assert.True(Handle.HoldingNotch);
+        Assert.Equal(HandleZone.Fill, Handle.Zone(0, 0));
+        Assert.Equal(HandleZone.Travel, Handle.Zone(1, 0));
+        Assert.Equal(HandleZone.Holding, Handle.Zone(2, 0));
+        Assert.Equal(HandleZone.Travel, Handle.Zone(3, 0));
+        Assert.Equal(HandleZone.Travel, Handle.Zone(5, 0));
+    }
+
+    [Fact]
+    public void HoldingReadsAsRunningAndTheStockPositionsKeepTheirValues()
+    {
+        Assert.Equal(0f, Handle.StockValue(0));
+        Assert.Equal(0f, Handle.StockValue(1));
+        Assert.Equal(0f, Handle.StockValue(2));
+        Assert.Equal(1 / 3f, Handle.StockValue(3), 5);
+        Assert.Equal(2 / 3f, Handle.StockValue(4), 5);
+        Assert.Equal(1f, Handle.StockValue(5));
+    }
+
+    [Fact]
+    public void AStockValueSetFromOutsideLandsOnTheStockPositionsOnly()
+    {
+        for (var stock = 0; stock < 4; stock++)
+        {
+            var value = stock / 3f;
+            var notch = Handle.NotchFor(value);
+            Assert.Equal(Handle.NotchOf(stock), notch);
+            Assert.Equal(value, Handle.StockValue(notch), 5);
+            Assert.Equal(notch / 5f, Handle.HandleValue(value), 5);
+        }
+        Assert.Equal(new[] { 1, 3, 4, 5 }, Enumerable.Range(0, 4).Select(Handle.NotchOf));
+    }
+}

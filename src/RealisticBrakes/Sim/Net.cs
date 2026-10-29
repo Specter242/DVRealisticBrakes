@@ -94,7 +94,15 @@ namespace RealisticBrakes.Sim
                             SetHold(car, player, action.Value != 0);
                         break;
                     case NetActionKind.Bail:
-                        if (Main.Active)
+                        // An E-T engine's graduated bail (its value in units, 0 for still held, with a hold for the network's
+                        // delays) and its let-go; anything else is a full bail. An older build bails in full on any of them.
+                        if (!Main.Active)
+                            break;
+                        if (action.Sub == IndependentBailClick.BailLetGo)
+                            IndependentBailClick.LetGoConsist(car);
+                        else if (action.Sub == IndependentBailClick.GraduatedBail)
+                            IndependentBailClick.BailConsist(car, false, action.Value * IndependentBailClick.NetUnit, IndependentBailClick.RemoteHold);
+                        else
                             IndependentBailClick.BailConsist(car, false);
                         break;
                     case NetActionKind.HandleZone:
@@ -231,6 +239,7 @@ namespace RealisticBrakes.Sim
             public BrakingMode FreightMode;
             public bool ManualEmptyLoaded;
             public bool WidenTrainBrakeHandles;
+            public LoadBraking LoadBraking;
 
             public static ModelSettings From(Settings s) => new ModelSettings
             {
@@ -240,6 +249,7 @@ namespace RealisticBrakes.Sim
                 FreightMode = s.FreightMode,
                 ManualEmptyLoaded = s.ManualEmptyLoaded,
                 WidenTrainBrakeHandles = s.WidenTrainBrakeHandles,
+                LoadBraking = s.LoadBraking,
             };
 
             public void To(Settings s)
@@ -250,11 +260,12 @@ namespace RealisticBrakes.Sim
                 s.FreightMode = FreightMode;
                 s.ManualEmptyLoaded = ManualEmptyLoaded;
                 s.WidenTrainBrakeHandles = WidenTrainBrakeHandles;
+                s.LoadBraking = LoadBraking;
             }
 
             public bool SameAs(ModelSettings o) =>
                 Enabled == o.Enabled && Equipment == o.Equipment && BrakeForceFromCar == o.BrakeForceFromCar && FreightMode == o.FreightMode
-                && ManualEmptyLoaded == o.ManualEmptyLoaded && WidenTrainBrakeHandles == o.WidenTrainBrakeHandles;
+                && ManualEmptyLoaded == o.ManualEmptyLoaded && WidenTrainBrakeHandles == o.WidenTrainBrakeHandles && LoadBraking == o.LoadBraking;
         }
 
         /// <summary>This player's own model settings while a host's are in use; null otherwise.</summary>

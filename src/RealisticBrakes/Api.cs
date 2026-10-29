@@ -17,7 +17,10 @@ namespace RealisticBrakes
         /// the automatic application then on, the train's brakes staying
         /// applied, until a release. Returns the cylinder pressure bailed, gauge
         /// bar; 0 when there was nothing to bail or the car isn't an engine
-        /// under the model.
+        /// under the model. On an American steam engine's E-T, in an emergency
+        /// from its own handle, the valve puts the pressure back once the
+        /// independent leaves release, so a single call lets off only for a
+        /// moment (Wood p. 120).
         /// </summary>
         public static float BailOff(TrainCar car)
         {

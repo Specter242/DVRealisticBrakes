@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.0 (2026-10-28)
+
+- On American equipment, the steam engines and the DM3 have the E-T brake
+  valve. A holding position between running and lap keeps the engine's
+  brakes on while the train releases, and release blows a warning hiss.
+  The engine's train brake comes off only in running, all at once.
+- On those engines, click and hold the independent lever to bail off a
+  little at a time.
+- Their service is slower, lap no longer makes up leaks, an emergency
+  brakes the engine harder, the independent gives 3.1 bar, and the air pump
+  keeps the main reservoir about 1.4 bar over the pipe in running.
+- American cars near the engine release and recharge more slowly, so a
+  long train releases together. Retainers let off at the real pace, and
+  each car brakes a little differently.
+- American coaches release in steps and brake harder in an emergency.
+- New setting: American cars' load braking. By default they have no
+  empty/load valve, as in the steam era, so loaded trains stop much longer;
+  the other choice is automatic empty/load.
+- Looking at an engine's train brake, independent, or brake valve cut-out
+  shows where it stands (not in VR). A setting turns it off.
+- A brake handle left in release, holding, or emergency stays there through
+  a save, and a remote or driver mod that applies the brakes takes it out.
+
 ## 1.0.2 (2026-10-28)
 
 - A car's levers keep showing their setting when you walk away and come

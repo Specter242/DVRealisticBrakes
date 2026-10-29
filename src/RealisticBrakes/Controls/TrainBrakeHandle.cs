@@ -17,6 +17,7 @@ namespace RealisticBrakes.Controls
 
         // The game's own members a widened handle calls, found once (Supported).
         private static Action<ControlImplBase, float> requestValueUpdate;
+        private static Action<ControlImplBase, float> acceptSetValue;
         private static Action<SteppedJoint> restartSteppedJoint;
         private static bool? supported;
 
@@ -30,6 +31,7 @@ namespace RealisticBrakes.Controls
                     try
                     {
                         requestValueUpdate = AccessTools.MethodDelegate<Action<ControlImplBase, float>>(AccessTools.Method(typeof(ControlImplBase), "RequestValueUpdate", new[] { typeof(float) }));
+                        acceptSetValue = AccessTools.MethodDelegate<Action<ControlImplBase, float>>(AccessTools.Method(typeof(ControlImplBase), "AcceptSetValue", new[] { typeof(float) }));
                         restartSteppedJoint = AccessTools.MethodDelegate<Action<SteppedJoint>>(AccessTools.Method(typeof(SteppedJoint), "Start"));
                         supported = true;
                     }
@@ -53,6 +55,8 @@ namespace RealisticBrakes.Controls
         private const float SpringBackTime = 0.5f;
 
         private bool invert;
+        private bool settingRaw;
+        private float followedAt = float.NegativeInfinity;
         private ControlImplBase control;
         private SteppedJoint stepped;
         private float heldPastReleaseSince = float.NaN;
@@ -115,6 +119,33 @@ namespace RealisticBrakes.Controls
             if (zone == HandleZone.Fill && hand != LocalHand && system.selfLappingController && !remoteFills.Contains(entry))
                 remoteFills.Add(entry);
         }
+
+        /// <summary>
+        /// Whether a handle in <paramref name="zone"/> can stand at the stock
+        /// value <paramref name="stock"/>: its added notch reads exactly as
+        /// release (a filling stroke, a steam engine's release, holding) or
+        /// full service (emergency), within a float's rounding. Wider bands
+        /// took a fine Custom Car Loader handle's first or last service notch
+        /// for them (the second review, 2026-10-28: 1/23 on 24 notches).
+        /// </summary>
+        public static bool Stands(HandleZone zone, float stock) =>
+            zone == HandleZone.Emergency ? stock >= 1f - EndTolerance : zone == HandleZone.Travel || stock <= EndTolerance;
+
+        // A stock value this close to an end is at it: far under any handle's notch spacing.
+        private const float EndTolerance = 1e-3f;
+
+        /// <summary>A value set from outside took <paramref name="system"/>'s handle out of its added notch.</summary>
+        public static void ClearZone(BrakeSystem system)
+        {
+            if (system == null || !zones.TryGetValue(system, out var entry) || entry.Value == HandleZone.Travel)
+                return;
+            entry.Value = HandleZone.Travel;
+            remoteFills.Remove(entry);
+        }
+
+        /// <summary>Whether a handle left in <paramref name="zone"/> stays there, to be saved: all but a diesel's sprung filling stroke.</summary>
+        public static bool Stays(HandleZone zone, BrakeSystem system) =>
+            zone == HandleZone.Holding || zone == HandleZone.Emergency || (zone == HandleZone.Fill && system != null && !system.selfLappingController);
 
         /// <summary>The game resets <paramref name="system"/>'s engine for reuse: its handle's added notch goes with it.</summary>
         public static void Forget(BrakeSystem system)
@@ -193,13 +224,16 @@ namespace RealisticBrakes.Controls
             var spec = control.GetComponent<Lever>();
             if (spec == null || !spec.useSteppedJoint || !spec.steppedValueUpdate || !spec.useLimits || spec.notches < 2)
                 return;
-            // The American 26-L has no filling stroke (DriverBrakeValveSpec.FillingStroke); the equipment is read as the cab loads.
+            // The American 26-L has no filling stroke (DriverBrakeValveSpec.FillingStroke), and the H-6 has holding; the
+            // equipment is read as the cab loads.
+            var american = Main.Settings.Equipment == Equipment.American;
             var layout = system.selfLappingController
-                ? WidenedHandle.SelfLapping(spec.notches, fillingStroke: Main.Settings.Equipment != Equipment.American)
-                : WidenedHandle.ManualLap(spec.notches);
+                ? WidenedHandle.SelfLapping(spec.notches, fillingStroke: !american)
+                : WidenedHandle.ManualLap(spec.notches, holding: american);
             var step = (spec.jointLimitMax - spec.jointLimitMin) / (spec.notches - 1);
-            // Value 0, release, is at the joint's lower limit, or its upper on an inverted lever.
-            var atRelease = layout.ReleaseNotch ? step : 0f;
+            // Value 0, release, is at the joint's lower limit, or its upper on an inverted lever. Holding comes in after running,
+            // so running moves a notch toward release with it, and the stock notches past it keep their places.
+            var atRelease = ((layout.ReleaseNotch ? 1 : 0) + (layout.HoldingNotch ? 1 : 0)) * step;
             var atFull = layout.EmergencyNotch ? step : 0f;
             var min = spec.jointLimitMin - (spec.invertDirection ? atFull : atRelease);
             var max = spec.jointLimitMax + (spec.invertDirection ? atRelease : atFull);
@@ -219,9 +253,9 @@ namespace RealisticBrakes.Controls
             }
             else if (spec.useInnerLimitSpring && layout.ReleaseNotch)
             {
-                // A handle's own spring zone, counted from release, moves with the notch added there.
-                spec.innerLimitMinNotch++;
-                spec.innerLimitMaxNotch++;
+                // A handle's own spring zone, counted from release, moves with the notches added there.
+                spec.innerLimitMinNotch = layout.NotchOf(spec.innerLimitMinNotch);
+                spec.innerLimitMaxNotch = layout.NotchOf(spec.innerLimitMaxNotch);
             }
 
             var handle = control.gameObject.AddComponent<TrainBrakeHandle>();
@@ -290,12 +324,57 @@ namespace RealisticBrakes.Controls
             localZone = HandleZone.Travel;
         }
 
-        /// <summary>Where on the widened travel, 0 to 1, a stock value set from outside puts the lever.</summary>
-        public float HandleValue(float value) => Layout.HandleValue(value);
+        /// <summary>Where on the widened travel, 0 to 1, a stock value set from outside puts the lever; a value this handle sets on itself stands.</summary>
+        public float HandleValue(float value) => settingRaw ? value : Layout.HandleValue(value);
+
+        // Let go, the handle follows the engine's added notch when another hand or a save set it, or a value from outside
+        // took it out (a review, 2026-10-28: a save in holding loaded with the handle at running). Not a diesel's sprung
+        // filling stroke, which its spring takes home. Tried at most twice a second, in case the lever won't move.
+        private void Follow()
+        {
+            if (Layout == null || control == null || car == null || car.brakeSystem == null || Held || Time.time - followedAt < 0.5f)
+                return;
+            var zone = ZoneOf(car.brakeSystem);
+            var at = Layout.Zone(Notch, 0);
+            if (zone == at || (Layout.SpringsBack && (zone == HandleZone.Fill || at == HandleZone.Fill)))
+                return;
+            int target;
+            switch (zone)
+            {
+                case HandleZone.Fill:
+                    target = Layout.ReleaseNotch ? 0 : -1;
+                    break;
+                case HandleZone.Holding:
+                    target = Layout.HoldingNotch ? Layout.NotchOf(0) + 1 : -1;
+                    break;
+                case HandleZone.Emergency:
+                    target = Layout.EmergencyNotch ? Layout.Notches - 1 : -1;
+                    break;
+                default:
+                    target = Layout.NotchFor(control.Value);
+                    break;
+            }
+            // A handle widened before the equipment changed may lack the notch.
+            if (target < 0 || target == Notch)
+                return;
+            // The lever reports the notch it reaches (OnNotch); one not built yet, or held, doesn't move, and is tried again.
+            followedAt = Time.time;
+            settingRaw = true;
+            try
+            {
+                // Straight to the lever: the control's own setter would report the travel's value as the stock one.
+                acceptSetValue(control, target / (float)(Layout.Notches - 1));
+            }
+            finally
+            {
+                settingRaw = false;
+            }
+        }
 
         // A sprung handle: times the hold past release. And the game's spring moves the target only as the lever's angle changes: one let go dead still past release would stay there.
         private void Update()
         {
+            Follow();
             ReportZone();
             if (Layout == null || !Layout.SpringsBack || Notch != 0 || control == null)
             {

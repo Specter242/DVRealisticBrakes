@@ -317,7 +317,9 @@ namespace RealisticBrakes.Controls
         {
             if (Main.Settings.Equipment == Equipment.American)
             {
-                yield return CarLeverKind.Retainer;
+                // A coach's graduated-release equipment has no retainer here: it runs on the level of the passenger lines.
+                if (!CarAir.IsCoach(car))
+                    yield return CarLeverKind.Retainer;
                 yield return CarLeverKind.IsolatingCock;
                 yield break;
             }

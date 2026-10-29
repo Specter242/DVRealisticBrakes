@@ -40,6 +40,21 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double CylinderVolume { get; set; } = 0.0167;
 
+        /// <summary>The piston travel <see cref="CylinderVolume"/> is at, inches: 8, as the equipment is proportioned (ICS p. 367).</summary>
+        public const double NominalTravel = 8;
+
+        /// <summary>The 10-inch cylinder's swept volume per inch of piston travel, m³ (78.5 sq in).</summary>
+        public const double VolumePerInch = 78.54 * 0.0254 * 0.0254 * 0.0254;
+
+        /// <summary>
+        /// The cylinder at <paramref name="travel"/> inches of piston travel,
+        /// m³: the same clearance and pipe, and the piston's sweep. Travel
+        /// matters a great deal: a 12 lb reduction gives "18 lb" at 12 in,
+        /// "35 lb" at 8 in, and "65 lb" at 4 in (ICS p. 200).
+        /// </summary>
+        public static double CylinderVolumeAt(double travel) =>
+            0.0167 + (Math.Max(1, travel) - NominalTravel) * VolumePerInch;
+
         /// <summary>The quick-action chamber, which senses an emergency rate of fall, m³ (inferred).</summary>
         public double QuickActionVolume { get; set; } = 0.0015;
 
@@ -117,6 +132,41 @@ namespace RealisticBrakes.Core
         /// The cylinder vents through <see cref="ReleasePort"/>.
         /// </summary>
         public Orifice DrainPort { get; set; } = new Orifice(4.0);
+
+        /// <summary>
+        /// The retaining valve's vent while it holds (HP or LP): "1/16-in.",
+        /// which takes "about 20 to 25 sec." from 50 to 15 lb, "thus sufficient
+        /// time is given for the auxiliaries to recharge" (ICS p. 378). Sized
+        /// to that time on this larger cylinder: the 1/16 in. bore took 41 s.
+        /// </summary>
+        public Orifice RetainerVent { get; set; } = new Orifice(2.15);
+
+        /// <summary>
+        /// Whether the valve has retarded release and uniform recharge, as the
+        /// K triple brought in (ICS pp. 194–195): a car that sees the pipe rise
+        /// well over its auxiliary reservoir, near the engine, releases through
+        /// a small port and recharges slowly, so a long train lets go "at
+        /// practically the same time" (p. 209) and the head end can't rob the
+        /// rear of air.
+        /// </summary>
+        public bool RetardedRelease { get; set; } = true;
+
+        /// <summary>How far the pipe must stand over the auxiliary reservoir for a retarded release, Pa: "about 3 lb." (ICS p. 195).</summary>
+        public double RetardThreshold { get; set; } = 0.2 * Air.Bar;
+
+        /// <summary>
+        /// The retarded release's exhaust: set so the head end of a long train
+        /// lets go with the rear, about 24 s after a full service on 50 cars.
+        /// The accelerated release already carries a release down the train
+        /// quickly, so the head end only waits a few seconds more.
+        /// </summary>
+        public Orifice RetardedReleasePort { get; set; } = new Orifice(RetardedReleaseBore);
+
+        /// <summary>The retarded release's exhaust bore, mm (set by the tests).</summary>
+        public const double RetardedReleaseBore = 2.4;
+
+        /// <summary>The share of the charging the auxiliary gets in retarded release: the feed groove "about half as large" (ICS p. 195).</summary>
+        public double RetardedChargeShare { get; set; } = 0.5;
 
         /// <summary>The high-pressure retainer's hold, gauge Pa: 20 psi.</summary>
         public double HighRetained { get; set; } = 1.4 * Air.Bar;
@@ -324,6 +374,7 @@ namespace RealisticBrakes.Core
             var exhausted = 0.0;
             FillFlow = 0;
             ChargeFlow = 0;
+            Retarded = false;
             if (Isolated)
             {
                 Applied = false;
@@ -418,21 +469,24 @@ namespace RealisticBrakes.Core
                     }
                 }
             }
+            else if (acceleratingRelease)
+            {
+                exhausted += Exhaust(dt, false);
+                if (spec.AcceleratedRelease.PassOneWay(EmergencyReservoir, pipe, dt) <= 0)
+                    acceleratingRelease = false;
+            }
             else
             {
-                exhausted += Exhaust(dt);
-                if (acceleratingRelease)
-                {
-                    if (spec.AcceleratedRelease.PassOneWay(EmergencyReservoir, pipe, dt) <= 0)
-                        acceleratingRelease = false;
-                }
-                else
-                {
-                    var charged = spec.AuxiliaryCharging.PassOneWay(pipe, AuxiliaryReservoir, dt);
-                    charged += auxiliaryBackflow.Pass(pipe, AuxiliaryReservoir, dt);
-                    charged += spec.EmergencyCharging.PassOneWay(pipe, EmergencyReservoir, dt);
-                    ChargeFlow = Math.Max(0, charged) / dt;
-                }
+                // Near the engine, the pipe stands well over the reservoir: a retarded release, and a slow recharge. Further
+                // back the pipe rises no faster than the reservoir charges, and the car releases in full. (The emergency
+                // reservoir's own air raises the pipe at every car, so it doesn't count while it flows.)
+                Retarded = spec.RetardedRelease && pipe.Pressure - AuxiliaryReservoir.Pressure > spec.RetardThreshold;
+                exhausted += Exhaust(dt, Retarded);
+                var charging = Retarded ? dt * spec.RetardedChargeShare : dt;
+                var charged = spec.AuxiliaryCharging.PassOneWay(pipe, AuxiliaryReservoir, charging);
+                charged += auxiliaryBackflow.Pass(pipe, AuxiliaryReservoir, charging);
+                charged += spec.EmergencyCharging.PassOneWay(pipe, EmergencyReservoir, dt);
+                ChargeFlow = Math.Max(0, charged) / dt;
             }
 
             PipeDraw = (pipeBefore - pipe.Mass) / dt;
@@ -447,20 +501,31 @@ namespace RealisticBrakes.Core
             Emergency = false;
         }
 
-        /// <summary>Exhausts the cylinder through the retaining valve. Returns the air let out, kg.</summary>
-        private double Exhaust(double dt)
+        /// <summary>Whether the valve stands in retarded release, its exhaust restricted.</summary>
+        public bool Retarded { get; private set; }
+
+        /// <summary>
+        /// Exhausts the cylinder through the valve's release port, or its
+        /// retarded one, and the retaining valve: holding (HP or LP), the
+        /// retainer vents through its own small port down to its pressure.
+        /// Returns the air let out, kg.
+        /// </summary>
+        private double Exhaust(double dt, bool retarded)
         {
+            var port = retarded ? spec.RetardedReleasePort : spec.ReleasePort;
             switch (Retainer)
             {
                 case Retainer.HighPressure:
-                    return spec.ReleasePort.Vent(Cylinder, dt, Air.Atmosphere + spec.HighRetained);
+                    return Smaller(port, spec.RetainerVent).Vent(Cylinder, dt, Air.Atmosphere + spec.HighRetained);
                 case Retainer.LowPressure:
-                    return spec.ReleasePort.Vent(Cylinder, dt, Air.Atmosphere + spec.LowRetained);
+                    return Smaller(port, spec.RetainerVent).Vent(Cylinder, dt, Air.Atmosphere + spec.LowRetained);
                 case Retainer.SlowDirect:
-                    return spec.SlowDirectPort.Vent(Cylinder, dt);
+                    return Smaller(port, spec.SlowDirectPort).Vent(Cylinder, dt);
                 default:
-                    return spec.ReleasePort.Vent(Cylinder, dt);
+                    return port.Vent(Cylinder, dt);
             }
         }
+
+        private static Orifice Smaller(Orifice a, Orifice b) => a.EffectiveArea <= b.EffectiveArea ? a : b;
     }
 }

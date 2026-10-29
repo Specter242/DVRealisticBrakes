@@ -96,12 +96,16 @@ namespace RealisticBrakes.Sim
             var geometry = BrakeSets.Geometry;
             var pipe = Pa(pipePressure);
             CarBrake brake;
+            var american = Main.Settings.Equipment == Equipment.American;
             if (system.hasCompressor)
             {
-                var spec = new LocomotiveBrakeSpec();
+                // American manual-lap engines (the steam engines and the DM3) have the E-T equipment: the H-6 automatic and the
+                // No. 6 distributing valve. The self-lapping diesels have the 26-L.
+                var et = american && system.hasTrainBrake && !system.selfLappingController;
+                var spec = et ? LocomotiveBrakeSpec.EtSteam() : new LocomotiveBrakeSpec();
                 if (system.mainResVolume > 0)
                     spec.MainReservoirVolume = system.mainResVolume / 1000.0;
-                var valveSpec = Main.Settings.Equipment == Equipment.American ? DriverBrakeValveSpec.American() : DriverBrakeValveSpec.Uic();
+                var valveSpec = et ? DriverBrakeValveSpec.H6() : american ? DriverBrakeValveSpec.American() : DriverBrakeValveSpec.Uic();
                 var engine = new LocomotiveBrake(spec, system.hasTrainBrake ? new DriverBrakeValve(valveSpec) : null);
                 brake = new CarBrake(length, geometry, locomotive: engine);
                 engine.MainReservoir.Pressure = Pa(MainReservoirUnsmoothed(system));
@@ -112,17 +116,18 @@ namespace RealisticBrakes.Sim
             }
             else if (system.brakeCylinderPressureCalculation == BrakeSystem.BrakeCylinderPressureCalculation.Regular)
             {
-                if (Main.Settings.Equipment == Equipment.American)
+                if (american && !IsCoach(car))
                 {
                     // The stock brake keeps no emergency reservoir: it starts as charged as the auxiliary (a save's own key restores it).
-                    var valve = new AarControlValve();
+                    var valve = new AarControlValve(new AarControlValveSpec { CylinderVolume = AarControlValveSpec.CylinderVolumeAt(PistonTravel(car)) });
                     var aux = Pa(system.auxReservoirPressure);
                     valve.Restore(aux, aux, Pa(system.brakeCylinderPressureUnsmoothed), pipe);
                     brake = new CarBrake(length, geometry, valve);
                 }
                 else
                 {
-                    var valve = new UicDistributor { Mode = ModeFor(car) };
+                    // An American coach has graduated-release passenger equipment, which the distributor in P stands for.
+                    var valve = american ? new UicDistributor(UicDistributorSpec.AmericanCoach()) { Mode = BrakingMode.Passenger } : new UicDistributor { Mode = ModeFor(car) };
                     valve.Restore(Pa(system.controlReservoirPressure), Pa(system.auxReservoirPressure), Pa(system.brakeCylinderPressureUnsmoothed), pipe);
                     brake = new CarBrake(length, geometry, valve);
                 }
@@ -183,11 +188,18 @@ namespace RealisticBrakes.Sim
             if (mass <= 0f)
                 return false;
             var before = valve.Load;
-            // European cars' lever by hand when the setting says so; American empty/load equipment is always automatic.
-            if (!(Main.Settings.ManualEmptyLoaded && Brake.Distributor != null))
+            // European cars' lever by hand when the setting says so; American empty/load equipment is always automatic. An
+            // American car of the period has none: its cylinder takes full pressure, and its rigging's leverage gives the
+            // force for its empty weight (the review, 2026-10-28: run on the empty setting, every cylinder read 1.4 bar and
+            // the cars' piston travel stopped mattering).
+            var period = Brake.ControlValve != null && Main.Settings.LoadBraking == LoadBraking.Period;
+            if (period)
+                valve.Load = LoadSetting.Loaded;
+            else if (!(Main.Settings.ManualEmptyLoaded && Brake.Distributor != null))
                 valve.Load = Rigging.SettingFor(mass);
 
-            var multiplier = (float)Rigging.ForceMultiplier(BrakeRigging.StockBrakingFactor(Brake.CylinderGauge), System.handbrakePosition, mass);
+            var multiplier = (float)Rigging.ForceMultiplier(BrakeRigging.StockBrakingFactor(Brake.CylinderGauge), System.handbrakePosition, mass,
+                period ? Rigging.PeriodLeverage : 1);
             var perKg = Car.carLivery.parentType.brakes.MaxBrakingForcePerBogie * StockForcePerKg * multiplier;
             RiggedPerKg = perKg;
             foreach (var bogie in Car.Bogies)
@@ -212,12 +224,30 @@ namespace RealisticBrakes.Sim
         /// <summary>The game's per-kg factor on a car type's force per bogie (<c>Bogie.Awake</c>: 1/11,500).</summary>
         internal const float StockForcePerKg = 8.695652E-05f;
 
-        private static BrakingMode ModeFor(TrainCar car)
+        private static BrakingMode ModeFor(TrainCar car) => IsCoach(car) ? BrakingMode.Passenger : Main.Settings.FreightMode;
+
+        /// <summary>Whether <paramref name="car"/> is a passenger coach.</summary>
+        internal static bool IsCoach(TrainCar car)
         {
             var type = car != null && car.carLivery != null ? car.carLivery.parentType : null;
-            if (type != null && type.id == "Passenger")
-                return BrakingMode.Passenger;
-            return Main.Settings.FreightMode;
+            return type != null && type.id == "Passenger";
+        }
+
+        /// <summary>
+        /// An American car's piston travel, inches: 7 to 9, as car inspectors
+        /// left it (ICS p. 200: "as near 8 in. as possible"), the same for a
+        /// car every run and on every player's game.
+        /// </summary>
+        private static double PistonTravel(TrainCar car)
+        {
+            var id = car != null && car.logicCar != null ? car.logicCar.carGuid : null;
+            if (string.IsNullOrEmpty(id))
+                return AarControlValveSpec.NominalTravel;
+            // FNV-1a: string hashes differ between runtimes.
+            var hash = 2166136261u;
+            foreach (var c in id)
+                hash = (hash ^ c) * 16777619u;
+            return 7 + 2 * (hash % 1001) / 1000.0;
         }
 
         /// <summary>
@@ -268,6 +298,13 @@ namespace RealisticBrakes.Sim
             var compressing = bs.compressorProductionRate > 0.001f;
             // A widened handle's new notches read as their stock neighbors: only the handle knows them.
             var zone = TrainBrakeHandle.ZoneOf(bs);
+            // A value set from outside (the remote, a cable, a driver mod) that moves the handle off what its added notch
+            // reads as takes it out of that notch (the review, 2026-10-28: an apply and release by remote left it in holding).
+            if (zone != HandleZone.Travel && bs.trainBrakePosition != lastTrain && !TrainBrakeHandle.Stands(zone, bs.trainBrakePosition))
+            {
+                TrainBrakeHandle.ClearZone(bs);
+                zone = HandleZone.Travel;
+            }
             if (bs.trainBrakePosition != lastTrain || bs.independentBrakePosition != lastIndependent
                 || bs.trainBrakeCutout != lastCutout || compressing || compressing != lastCompressing || zone != lastZone)
                 changed = true;
@@ -290,6 +327,9 @@ namespace RealisticBrakes.Sim
                     valve.Position = DriverValvePosition.Fill;
                 else if (zone == HandleZone.Emergency)
                     valve.Position = DriverValvePosition.Emergency;
+                // The H-6's holding reads as running; a value set from outside since (the remote, a cable) moves it on.
+                else if (zone == HandleZone.Holding && !bs.selfLappingController && handle <= 0.1f)
+                    valve.Position = DriverValvePosition.Holding;
                 else if (bs.selfLappingController)
                 {
                     var t = bs.trainBrakeCurve != null ? bs.trainBrakeCurve.Evaluate(handle) : handle;
@@ -368,10 +408,13 @@ namespace RealisticBrakes.Sim
                 writtenMainReservoir = mr;
                 if (Mathf.Abs(bs.mainReservoirPressure - mr) > 0.0001f || before != mr)
                     bs.Fire_MainReservoirPressureChanged();
-                // The game's governor.
-                if (!bs.compressorActivationSignal && mr < bs.compressorActivationPressure)
+                // The E-T's duplex governor, set by the handle; otherwise the game's.
+                var setting = engine.GovernorSetting(Brake.PipeSection);
+                var on = double.IsNaN(setting) ? bs.compressorActivationPressure : Bar(Air.Atmosphere + setting - engine.Spec.GovernorDifferential);
+                var off = double.IsNaN(setting) ? MainReservoirCeiling : Mathf.Min(MainReservoirCeiling, Bar(Air.Atmosphere + setting));
+                if (!bs.compressorActivationSignal && mr < on)
                     bs.ToggleCompressorActivationSignal();
-                else if (bs.compressorActivationSignal && mr >= MainReservoirCeiling)
+                else if (bs.compressorActivationSignal && mr >= off)
                     bs.ToggleCompressorActivationSignal();
             }
             PipeFlow = (float)pipeIn * StockFlowPerKgPerSecond;

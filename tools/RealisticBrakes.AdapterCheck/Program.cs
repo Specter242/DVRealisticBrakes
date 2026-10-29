@@ -201,7 +201,7 @@ namespace RealisticBrakes.AdapterCheck
                   && typeof(DV.CabControls.VRTK.VRTK_ControlImplBaseInteractableObject).IsSubclassOf(interactable),
                 "the VR independent lever can take the trigger while held: VRTK's use flags and event, the game's use on release and its grabbing hand");
             Check(Controls.TrainBrakeHandle.Supported,
-                "a widened train brake handle finds the game's lever value update and notched-joint setup");
+                "a widened train brake handle finds the game's lever value update, its lever setter, and notched-joint setup");
             Check(typeof(Patches.CabControlsPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && typeof(Patches.WidenedHandleNotchPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && typeof(Patches.WidenedHandleSetPatch).IsDefined(typeof(OptionalPatchAttribute), false)
@@ -216,9 +216,12 @@ namespace RealisticBrakes.AdapterCheck
         {
             var settings = new Settings();
             var manual = typeof(Settings).GetField(nameof(Settings.ManualEmptyLoaded));
-            Check(!settings.ShowOverlay && !settings.ManualEmptyLoaded
+            Check(!settings.ShowOverlay && !settings.ManualEmptyLoaded && settings.ShowValveText
                   && !manual.GetCustomAttributes(true).Any(a => a.GetType().Name == "DrawAttribute"),
-                "a new install starts with the pressure overlay off and the empty/loaded lever automatic, its by-hand switch not in the menu");
+                "a new install starts with the pressure overlay off, the brake controls' text on, and the empty/loaded lever automatic, its by-hand switch not in the menu");
+            var draw = typeof(Settings).GetField(nameof(Settings.LoadBraking)).GetCustomAttributes(true).OfType<UnityModManagerNet.DrawAttribute>().SingleOrDefault();
+            Check(settings.LoadBraking == LoadBraking.Period && draw != null && draw.VisibleOn == "Equipment|American",
+                "American cars' load braking starts at Period, in the menu only with American equipment");
         }
 
         private static void CheckPumpSteam()

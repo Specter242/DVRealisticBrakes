@@ -77,10 +77,26 @@ while they recharge.
   - In **service** the equalizing reservoir comes down while you hold the
     handle there. Move to **lap** when it reaches the reduction you want,
     and the pipe follows and holds.
+  - With **American equipment** the handle has the real H-6's
+    **holding** position between running and lap: the train releases and
+    recharges as in running, but the engine's own brakes stay on. Release,
+    holding, then running is the real drill on a long train. In release
+    the valve blows a steady hiss, as the real one's warning port did, to
+    remind you the train is overcharging. The engine's
+    train brake lets go only in running, all at once. Service brings the
+    pipe down about 0.35 bar every 2 seconds, and in lap or service the
+    valve doesn't make up leaks, so a leaky train keeps braking harder.
+  - A handle left in release, holding, or emergency stays there through a
+    save. A remote or a driver mod that applies the brakes takes it out.
   - The **main reservoir gauge** now has two hands: red for the main
     reservoir, blue for the equalizing reservoir (ER). The pipe and
     cylinder gauge is labeled too. The overlay shows the equalizing
     reservoir as well.
+- **Looking at the brake handles** (not in VR) shows where they stand by
+  the crosshair: the train brake's position (with the equalizing
+  reservoir or the reduction), the independent's application and the
+  train brake's on the engine, and the brake valve's cut-out. A setting
+  turns this off.
 - **Long trains:** the rear brakes later and slower than the front. A
   release reaches the rear last, and the cars' reservoirs take minutes to
   recharge.
@@ -118,6 +134,12 @@ while they recharge.
   brakes let go, and the train's stay on. Engines joined by MU cable bail
   off together. A further reduction applies the engine again; a release
   clears the bail. A setting turns the click off.
+  - With **American equipment** a steam engine bails off a little at a
+    time, as the real E-T does: click and hold the independent lever, and
+    the engine's brakes let off for as long as you hold it (in VR, each trigger
+    press lets off some). What's left stays on. After an emergency from the
+    engine's own handle, the brakes come back as soon as you let go, as on
+    the real E-T.
 
 ## European or American equipment
 
@@ -142,6 +164,17 @@ A setting chooses the cars' equipment. **European** is the default.
     reservoirs. Back in running, the extra pressure bleeds away over up to
     ten minutes, and the brakes stay off. Brake in that time and the
     application comes on harder than usual.
+  - On a long train the cars near the engine let off more slowly and
+    recharge more slowly, so the whole train releases at about the same
+    time.
+  - Each car brakes a little harder or softer than the next, as real
+    cars' piston travel varied.
+  - Coaches release in steps, like the European brake, and an emergency
+    gives them about a sixth more than full service.
+  - The steam engines' air pump keeps the main reservoir about 1.4 bar
+    over the pipe in running and holding, and up to 7.6 bar in lap and
+    service, as the real duplex governor did. The independent brake gives
+    up to 3.1 bar, and an emergency puts 4.5 bar in the engine's cylinders.
 
 ## Loaded and empty cars
 
@@ -150,19 +183,27 @@ it did in the stock game, and a lighter load stops shorter. Each car's
 empty/loaded valve is set from its load: empty cars brake gently enough
 not to slide their wheels. A setting turns this off.
 
+American cars have no empty/loaded valve by default, as in the steam era:
+the cylinders take their full pressure, but every car brakes with the force
+sized for it empty, so a loaded train takes much longer to stop. Use the retainers on long grades. A setting gives them the modern
+automatic empty/load equipment instead.
+
 ## Settings
 
 - **Run the realistic brake:** off gives the game's own brake back at once,
   from the pressures this one left.
 - **Car brake equipment:** European or American.
 - **Brake force from the car:** loaded and empty cars stop differently.
+- **American cars' load braking:** Period (no empty/load valve, the
+  default) or EmptyLoad (automatic). Shown with American equipment.
 - **Freight cars' G/P lever** as cars come into service.
 - **Train brake handles' added notches:** the diesels' filling stroke and
-  emergency, and the steam engines' release. On by default; it takes
-  effect as a cab loads.
+  emergency, and the steam engines' release (and holding, with American
+  equipment). On by default; it takes effect as a cab loads.
 - **Equalizing reservoir hand** on the steam engines' main reservoir
   gauge: on by default; it takes effect as a cab loads.
 - **Click to bail off:** on by default.
+- **Brake controls' text** by the crosshair: on by default.
 - **Show each car's brake pressures** (off by default): an overlay for the train you're on:
   pipe, control (or, on American cars, emergency) reservoir, auxiliary
   reservoir, and cylinder, in gauge bar.

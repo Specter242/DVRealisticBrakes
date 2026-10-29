@@ -52,14 +52,30 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double ForceShare(double mass) => LoadedMass / Math.Max(1, mass);
 
- public double ForceMultiplier(double air, double hand, double mass)
+ public double ForceMultiplier(double air, double hand, double mass) => ForceMultiplier(air, hand, mass, 1);
+
+        /// <summary>
+        /// <see cref="ForceMultiplier(double, double, double)"/> for rigging
+        /// whose leverage gives <paramref name="leverage"/> of the loaded
+        /// force: <see cref="PeriodLeverage"/> for a car of the period.
+        /// </summary>
+        public double ForceMultiplier(double air, double hand, double mass, double leverage)
         {
             air = Math.Max(0, Math.Min(1, air));
             hand = Math.Max(0, Math.Min(1, hand));
-            var share = ForceShare(mass);
+            var share = ForceShare(mass) * leverage;
             var factor = Math.Max(air, hand);
             return factor > 0.001 ? Math.Max(air * share, hand * Holding.HandBrakeShare) / factor : share;
         }
+
+        /// <summary>
+        /// The leverage of a car of the period, which had no empty/load
+        /// equipment: its rigging gave its full cylinder pressure a force
+        /// sized to its light weight (ICS pp. 2, 245), here the game's force
+        /// for the empty car, so loaded it brakes as if empty. Its share of
+        /// the loaded rigging's force: empty ÷ loaded mass.
+        /// </summary>
+        public double PeriodLeverage => EmptyMass / LoadedMass;
 
         /// <summary>
         /// The empty setting's full-service cylinder pressure, gauge Pa: enough

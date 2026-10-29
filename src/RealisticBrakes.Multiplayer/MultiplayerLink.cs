@@ -387,6 +387,8 @@ namespace RealisticBrakes.Sim
             writer.Write(Cars.Count);
             foreach (var netId in Cars)
                 writer.Write(netId);
+            // After the cars, so an older guest reads what it knows and stops.
+            writer.Write((byte)Settings.LoadBraking);
         }
 
         public void Deserialize(BinaryReader reader)
@@ -400,6 +402,8 @@ namespace RealisticBrakes.Sim
                 FreightMode = (BrakingMode)reader.ReadByte(),
                 ManualEmptyLoaded = reader.ReadBoolean(),
                 WidenTrainBrakeHandles = reader.ReadBoolean(),
+                // An older host has no load braking setting: its American cars have automatic empty/load.
+                LoadBraking = LoadBraking.EmptyLoad,
             };
             Sequence = reader.ReadUInt32();
             States.Clear();
@@ -416,6 +420,8 @@ namespace RealisticBrakes.Sim
             count = reader.ReadInt32();
             for (var i = 0; i < count; i++)
                 Cars.Add(reader.ReadUInt16());
+            if (!reader.BaseStream.CanSeek || reader.BaseStream.Position < reader.BaseStream.Length)
+                Settings.LoadBraking = (LoadBraking)reader.ReadByte();
         }
     }
 }

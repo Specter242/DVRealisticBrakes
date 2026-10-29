@@ -41,6 +41,76 @@ namespace RealisticBrakes.Core
             ApplyPassenger = new Orifice(2.0),
             ReleasePassenger = new Orifice(1.05),
         };
+
+        /// <summary>
+        /// Whether the engine's automatic brake is the E-T's No. 6 distributing
+        /// valve, worked through the H-6: it applies with the reduction, but
+        /// releases only with the automatic handle in running, and then all at
+        /// once (Wood pp. 103, 115: "graduated off" only with the independent).
+        /// In release, holding, and lap it stays applied as the train releases
+        /// (Wood pp. 140, 142). Otherwise the engine follows its distributor,
+        /// graduated, as a European engine does.
+        /// </summary>
+        public bool HoldsAutomaticBrake { get; set; }
+
+        /// <summary>
+        /// The engine's cylinders in an emergency, gauge Pa: its full service,
+        /// unless the equipment gives more. The No. 6 equalizes "at 65 pounds
+        /// instead of the 50 pounds obtainable at full service" (Wood p. 91).
+        /// </summary>
+        public double EmergencyCylinder { get; set; } = 3.8 * Air.Bar;
+
+        /// <summary>
+        /// The engine's cylinders in an emergency made by its own brake valve,
+        /// gauge Pa: the No. 6's maintaining port "raises the latter pressure
+        /// to 68 pounds", its safety valve's setting (Wood p. 91).
+        /// </summary>
+        public double OwnEmergencyCylinder { get; set; } = 3.8 * Air.Bar;
+
+        /// <summary>A reduction past this, Pa, is an emergency (well past full service's 1.5 bar).</summary>
+        public double EmergencyReduction { get; set; } = 2.5 * Air.Bar;
+
+        /// <summary>
+        /// Whether the air pump's governor is the E-T's duplex governor: in
+        /// running and holding it holds the main reservoir "only 20 pounds or so
+        /// in excess of that in the brake pipe", and in lap and the application
+        /// positions lets it rise to 110 pounds (Wood pp. 208, 265; ICS
+        /// pp. 102, 106). Otherwise the game's own governor runs it.
+        /// </summary>
+        public bool DuplexGovernor { get; set; }
+
+        /// <summary>The duplex governor's excess pressure over the pipe, Pa: 20 psi.</summary>
+        public double ExcessPressure { get; set; } = 1.4 * Air.Bar;
+
+        /// <summary>The duplex governor's maximum-pressure head, gauge Pa: 110 psi.</summary>
+        public double GovernorMaximum { get; set; } = 7.6 * Air.Bar;
+
+        /// <summary>How far under its setting the governor starts the pump again, Pa (inferred: about 3 psi).</summary>
+        public double GovernorDifferential { get; set; } = 0.2 * Air.Bar;
+
+        /// <summary>
+        /// An American steam engine's E-T equipment (Wood; ICS): the No. 6
+        /// distributing valve held through release and holding, its emergency
+        /// at 65 and 68 lb, the S-6 independent from a 45 lb reducing valve
+        /// (Wood p. 181), the duplex governor, and a dead-engine feed through a
+        /// choke "about 1/16-inch diameter" (Wood p. 275). The distributing
+        /// valve has no quick service on the pipe: "the venting of brake pipe
+        /// air is not included as an emergency feature" (Wood p. 56).
+        /// </summary>
+        public static LocomotiveBrakeSpec EtSteam()
+        {
+            var spec = new LocomotiveBrakeSpec
+            {
+                HoldsAutomaticBrake = true,
+                EmergencyCylinder = 4.5 * Air.Bar,
+                OwnEmergencyCylinder = 4.7 * Air.Bar,
+                IndependentMaximum = 3.1 * Air.Bar,
+                DuplexGovernor = true,
+                DeadEngineFeed = new Orifice(1.6),
+            };
+            spec.Distributor.QuickService = new Orifice(0);
+            return spec;
+        }
     }
 
     /// <summary>
@@ -85,6 +155,20 @@ namespace RealisticBrakes.Core
         public double BailedOff { get; set; }
 
         /// <summary>
+        /// The automatic application an E-T engine holds, gauge Pa
+        /// (<see cref="LocomotiveBrakeSpec.HoldsAutomaticBrake"/>): the
+        /// highest its distributor has asked for, until the automatic handle
+        /// in running lets it go.
+        /// </summary>
+        public double HeldAutomatic { get; set; }
+
+        // Whether the automatic handle lets an E-T engine's brake go: in running, or with no valve of its own working (a trailing or dead engine).
+        private bool LetsAutomaticGo => DriverValve == null || !DriverValve.CutIn || DriverValve.Position == DriverValvePosition.Running;
+
+        // The automatic application standing, gauge Pa, before any bail.
+        private double StandingAutomatic => spec.HoldsAutomaticBrake ? HeldAutomatic : Math.Max(Distributor.Applied ? Distributor.TargetCylinder : 0, Pilot);
+
+        /// <summary>
         /// Bails off the independent (Realistic Firing's rules, its design
         /// "Bailing off", 2026-10-16): the engine lets go of all the automatic
         /// application then on, the train's brakes staying applied. It stays
@@ -94,12 +178,82 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double BailOff()
         {
-            if (!Distributor.Applied)
+            if (!Distributor.Applied && !(spec.HoldsAutomaticBrake && HeldAutomatic > 0))
                 return 0;
-            var standing = Math.Max(Distributor.TargetCylinder, Pilot);
+            // In the engine's own emergency on the E-T it lets off only for the moment it's held (BailHold).
+            bailing = Math.Max(bailing, BailHold);
+            var standing = StandingAutomatic;
             var bailed = Math.Max(0, standing - BailedOff);
             BailedOff = standing;
             return bailed;
+        }
+
+        /// <summary>
+        /// Bails off up to <paramref name="amount"/> gauge Pa of the automatic
+        /// application, graduated, as holding the S-6 independent in release
+        /// does on an E-T engine: what's left "will remain constant (unless
+        /// automatically increased by brake pipe leakage)" (Wood p. 120).
+        /// Returns what was bailed, gauge Pa. The independent counts as held in
+        /// release for <paramref name="hold"/> s; an amount of 0 only keeps it
+        /// held.
+        /// </summary>
+        public double BailOffBy(double amount, double hold = BailHold)
+        {
+            // Held in release, even with nothing more to let out: in the engine's own emergency the bail lasts while it's held.
+            bailing = Math.Max(bailing, hold);
+            if (amount <= 0)
+                return 0;
+            var standing = StandingAutomatic;
+            var was = BailedOff;
+            BailedOff = Math.Min(standing, BailedOff + amount);
+            return Math.Max(0, BailedOff - was);
+        }
+
+        /// <summary>
+        /// How long, in s, a bail counts as the independent still held in
+        /// release after its last <see cref="BailOffBy"/> or
+        /// <see cref="BailOff"/>: this game's lever calls once a frame while
+        /// it's held. Another player's comes over the network, with a longer
+        /// hold (<paramref name="hold"/> of <see cref="BailOffBy"/>).
+        /// </summary>
+        public const double BailHold = 0.25;
+
+        /// <summary>The independent let go of release: in the engine's own emergency, the maintaining port puts the bail back at once.</summary>
+        public void EndBail() => bailing = 0;
+
+        // The time left, s, that the independent counts as held in release.
+        private double bailing;
+
+        /// <summary>Whether the engine's automatic brake stands applied (held, on an E-T engine).</summary>
+        public bool AutomaticApplied => spec.HoldsAutomaticBrake ? HeldAutomatic > 0 : Distributor.Applied;
+
+        /// <summary>
+        /// The duplex governor's setting now, gauge Pa, or NaN where the game's
+        /// governor runs the pump: the pipe at the engine plus the excess
+        /// pressure in running and holding (so charging an empty train, "the
+        /// air pump will stop working" until the main reservoir has come down
+        /// near the pipe, Wood p. 228); release's 20 lb over the feed valve,
+        /// where main reservoir and pipe "would have equalized at 90 pounds"
+        /// (p. 265); and the maximum head in lap, service, and emergency, or
+        /// with no valve of its own working.
+        /// </summary>
+        public double GovernorSetting(Chamber pipe)
+        {
+            if (!spec.DuplexGovernor)
+                return double.NaN;
+            var valve = DriverValve;
+            if (valve == null || !valve.CutIn)
+                return spec.GovernorMaximum;
+            switch (valve.Position)
+            {
+                case DriverValvePosition.Running:
+                case DriverValvePosition.Holding:
+                    return Math.Min(spec.GovernorMaximum, Math.Max(0, pipe.Pressure - Air.Atmosphere) + spec.ExcessPressure);
+                case DriverValvePosition.Fill:
+                    return Math.Min(spec.GovernorMaximum, valve.Spec.Running + spec.ExcessPressure);
+                default:
+                    return spec.GovernorMaximum;
+            }
         }
 
         // The automatic demand: the distributor's pilot cylinder, gauge Pa.
@@ -110,6 +264,9 @@ namespace RealisticBrakes.Core
 
         /// <summary>The compressor's free air delivery, kg/s, into the main reservoir.</summary>
         public double CompressorFlow { get; set; }
+
+        /// <summary>The automatic brake's demand on the engine after any bail, gauge Pa.</summary>
+        public double AutomaticCylinder { get; private set; }
 
         /// <summary>The cylinder pressure the relay holds toward, gauge Pa.</summary>
         public double TargetCylinder { get; private set; }
@@ -136,11 +293,39 @@ namespace RealisticBrakes.Core
             // comes down at the Passenger release time, so the bail comes down with it, never under it: the engine stays off.
             var pilot = Pilot;
             if (Distributor.Applied && !wasApplied)
+            {
+                // A held E-T brake keeps what wasn't bailed: the bail emptied its application chamber.
+                HeldAutomatic = Math.Max(0, HeldAutomatic - BailedOff);
                 BailedOff = 0;
+            }
             wasApplied = Distributor.Applied;
-            BailedOff = Math.Max(0, Math.Min(BailedOff, Distributor.Applied ? Math.Max(Distributor.TargetCylinder, pilot) : pilot));
-            var automatic = Math.Max(0, pilot - BailedOff);
+            double automatic;
+            if (spec.HoldsAutomaticBrake)
+            {
+                // The No. 6: applied with the reduction, never graduated off; released by the pipe, it lets go only with the
+                // automatic handle in running, and then at once.
+                if (Distributor.Applied)
+                    HeldAutomatic = Math.Max(HeldAutomatic, pilot);
+                else if (LetsAutomaticGo)
+                    HeldAutomatic = 0;
+                var own = DriverValve != null && DriverValve.CutIn && DriverValve.Position == DriverValvePosition.Emergency;
+                if (Distributor.Applied && Distributor.ControlReservoir.Pressure - pipe.Pressure > spec.EmergencyReduction)
+                    HeldAutomatic = Math.Max(HeldAutomatic, own ? spec.OwnEmergencyCylinder : spec.EmergencyCylinder);
+                // In the engine's own emergency the H-6's maintaining port puts back what the independent lets out as soon as
+                // it's no longer held in release (Wood p. 120): a bail lasts only while the lever is held.
+                if (own && bailing <= 0)
+                    BailedOff = 0;
+                bailing = Math.Max(0, bailing - dt);
+                BailedOff = Math.Max(0, Math.Min(BailedOff, HeldAutomatic));
+                automatic = Math.Max(0, HeldAutomatic - BailedOff);
+            }
+            else
+            {
+                BailedOff = Math.Max(0, Math.Min(BailedOff, Distributor.Applied ? Math.Max(Distributor.TargetCylinder, pilot) : pilot));
+                automatic = Math.Max(0, pilot - BailedOff);
+            }
             var independent = spec.IndependentMaximum * Math.Max(0, Math.Min(1, Independent));
+            AutomaticCylinder = automatic;
             TargetCylinder = Math.Max(automatic, independent);
             var target = Air.Atmosphere + TargetCylinder;
 

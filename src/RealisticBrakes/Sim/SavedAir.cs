@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using DV.Simulation.Brake;
 using Newtonsoft.Json.Linq;
+using RealisticBrakes.Controls;
 using RealisticBrakes.Core;
 
 namespace RealisticBrakes.Sim
@@ -23,9 +24,22 @@ namespace RealisticBrakes.Sim
         // A loaded car's entry, held until the model first builds the car's air.
         private static readonly ConditionalWeakTable<BrakeSystem, JObject> pending = new ConditionalWeakTable<BrakeSystem, JObject>();
 
-        /// <summary>The car's entry to save, or null when the model hasn't taken the car on.</summary>
-        public static JObject Write(BrakeSystem system) =>
-            Main.Active && system != null && BrakeSets.TryGet(system, out var air) ? Write(air.Brake) : null;
+        /// <summary>
+        /// The car's entry to save, or null when the model hasn't taken the car
+        /// on. An engine's handle left in an added notch that stays (holding,
+        /// a steam engine's release, emergency) is saved with it, as the game
+        /// saves only the handle's stock value.
+        /// </summary>
+        public static JObject Write(BrakeSystem system)
+        {
+            if (!Main.Active || system == null || !BrakeSets.TryGet(system, out var air))
+                return null;
+            var entry = Write(air.Brake);
+            var zone = TrainBrakeHandle.ZoneOf(system);
+            if (air.Brake.Locomotive != null && TrainBrakeHandle.Stays(zone, system))
+                entry["zone"] = (int)zone;
+            return entry;
+        }
 
         /// <summary>The entry for a car's air.</summary>
         internal static JObject Write(CarBrake brake)
@@ -40,6 +54,8 @@ namespace RealisticBrakes.Sim
             {
                 WriteValve(entry, engine.Distributor, "loco");
                 entry["bailed"] = CarAir.Bar(engine.BailedOff);
+                if (engine.HeldAutomatic > 0)
+                    entry["held"] = CarAir.Bar(engine.HeldAutomatic);
                 if (engine.DriverValve != null)
                 {
                     entry["er"] = CarAir.Bar(engine.DriverValve.EqualizingReservoir.Pressure);
@@ -119,6 +135,9 @@ namespace RealisticBrakes.Sim
                 return;
             pending.Remove(air.System);
             Read(entry, air.Brake);
+            var zone = (int?)entry["zone"];
+            if (zone.HasValue && air.Brake.Locomotive != null && air.Car != null && TrainBrakeHandle.Stays((HandleZone)zone.Value, air.System))
+                TrainBrakeHandle.SetRemoteZone(air.Car, (HandleZone)zone.Value, TrainBrakeHandle.LocalHand);
         }
 
         /// <summary>Sets a car's air from its saved entry, over what the stock keys restored.</summary>
@@ -135,6 +154,9 @@ namespace RealisticBrakes.Sim
             {
                 ReadValve(entry, engine.Distributor, "loco");
                 engine.BailedOff = ((float?)entry["bailed"] ?? 0f) * Air.Bar;
+                // An E-T engine's brake held through release (none on other engines).
+                if (engine.Spec.HoldsAutomaticBrake)
+                    engine.HeldAutomatic = ((float?)entry["held"] ?? 0f) * Air.Bar;
                 if (engine.DriverValve != null)
                 {
                     var er = (float?)entry["er"];

@@ -26,6 +26,15 @@ namespace RealisticBrakes.Core
 
         /// <summary>Emergency: the pipe opened wide to the air.</summary>
         Emergency,
+
+        /// <summary>
+        /// Holding, on the H-6: the pipe fed as in running, while the engine's
+        /// own automatic brake is held applied as the train releases and
+        /// recharges (Wood, The Westinghouse E-T Air Brake Instruction Pocket
+        /// Book, p. 140; ICS, The Westinghouse Air-Brake Handbook, 1918,
+        /// p. 140).
+        /// </summary>
+        Holding,
     }
 
     /// <summary>
@@ -77,6 +86,25 @@ namespace RealisticBrakes.Core
 
  public bool FillingStroke { get; set; } = true;
 
+        /// <summary>
+        /// Whether the relay feeds the pipe in lap and in a manual-lap service,
+        /// holding it to the equalizing reservoir against leaks, as self-lapping
+        /// valves do. The H-6 doesn't: lapped, "pressure is no longer being
+        /// supplied to the brake pipe and there is no further reduction of the
+        /// latter except from leakage" (Wood p. 143), and in service its
+        /// discharge valve only exhausts (p. 154).
+        /// </summary>
+        public bool MaintainsInLap { get; set; } = true;
+
+        /// <summary>
+        /// The H-6's warning port: in release the feed valve's air blows
+        /// through it to the air, "giving warning of the possibility of brake
+        /// pipe overcharge" (Wood p. 161). Closed on the other valves. Its
+        /// bore is inferred, for a blow about a quarter as loud as the game's
+        /// loudest exhaust.
+        /// </summary>
+        public Orifice WarningPort { get; set; } = new Orifice(0);
+
         /// <summary>The equalizing reservoir's charging port from the main reservoir.</summary>
         public Orifice EqualizingCharge { get; set; } = new Orifice(1.2);
 
@@ -121,6 +149,32 @@ namespace RealisticBrakes.Core
             LetsDownRelease = true,
             FillingStroke = false,
         };
+
+        /// <summary>
+        /// The H-6 automatic brake valve of the E-T equipment, on an American
+        /// steam engine: release, running, holding, lap, service, and emergency.
+        /// Its equalizing reservoir is 812 cu in, 13.3 L (ICS p. 370), and falls
+        /// in service "at the rate of about 5 pounds for each 2 seconds" (Wood
+        /// p. 154), about 0.17 bar/s, so a 1.5 bar reduction takes 8 to 9 s
+        /// (the ports set by the tests). Lapped or in service it doesn't feed
+        /// the pipe.
+        /// </summary>
+        public static DriverBrakeValveSpec H6()
+        {
+            var spec = American();
+            spec.EqualizingVolume = 0.0133;
+            spec.EqualizingExhaust = new Orifice(H6ServiceBore);
+            spec.EqualizingCharge = new Orifice(2.0);
+            spec.MaintainsInLap = false;
+            spec.WarningPort = new Orifice(WarningBore);
+            return spec;
+        }
+
+        /// <summary>The H-6's warning port bore, mm (inferred).</summary>
+        public const double WarningBore = 1.3;
+
+        /// <summary>The H-6's service exhaust bore, mm (set by the tests to its 0.17 bar/s).</summary>
+        public const double H6ServiceBore = 1.85;
     }
 
     /// <summary>
@@ -179,6 +233,7 @@ namespace RealisticBrakes.Core
                     case DriverValvePosition.Lap:
                         return EqualizingReservoir.Pressure;
                     default:
+                        // Running, and the H-6's holding, which feeds the pipe as running does.
                         return running + OverchargeLeft;
                 }
             }
@@ -218,6 +273,7 @@ namespace RealisticBrakes.Core
                         OverchargeLeft = spec.Overcharge;
                     break;
                 case DriverValvePosition.Running:
+                case DriverValvePosition.Holding:
                     OverchargeLeft = Math.Max(0, OverchargeLeft - spec.OverchargeLetDown * dt);
                     break;
                 case DriverValvePosition.Lap when spec.LetsDownRelease:
@@ -247,16 +303,27 @@ namespace RealisticBrakes.Core
             {
                 if (Position == DriverValvePosition.Fill)
                     spec.FillPort.PassOneWay(mainReservoir, pipe, dt, Air.Atmosphere + spec.Running + spec.FillLimit);
-                Relay(mainReservoir, pipe, dt, exhaust: Position != DriverValvePosition.Fill);
+                // The H-6 lapped or in service only exhausts the pipe; it feeds it in running, holding, and release.
+                var supply = spec.MaintainsInLap || (Position != DriverValvePosition.Lap && Position != DriverValvePosition.Apply);
+                Relay(mainReservoir, pipe, dt, exhaust: Position != DriverValvePosition.Fill, supply);
             }
             var change = (pipe.Mass - pipeBefore) / dt;
             if (change > 0)
                 FeedFlow = change;
             else
                 ExhaustFlow = -change;
+
+            // The H-6's warning port blows the feed valve's air away for as long as the handle stands in release.
+            if (Position == DriverValvePosition.Fill && spec.WarningPort.IsOpen)
+            {
+                var blown = spec.WarningPort.MassFlow(Math.Min(mainReservoir.Pressure, running), Air.Atmosphere) * dt;
+                blown = Math.Min(blown, Math.Max(0, -mainReservoir.MassToReach(Air.Atmosphere)));
+                mainReservoir.Mass -= blown;
+                ExhaustFlow += blown / dt;
+            }
         }
 
-        private void Relay(Chamber mainReservoir, Chamber pipe, double dt, bool exhaust)
+        private void Relay(Chamber mainReservoir, Chamber pipe, double dt, bool exhaust, bool supply = true)
         {
             var reference = EqualizingReservoir.Pressure;
             var error = pipe.Pressure - reference;
@@ -264,7 +331,10 @@ namespace RealisticBrakes.Core
             if (opening <= 0)
                 return;
             if (error < 0)
-                spec.RelaySupply.Opened(opening).PassOneWay(mainReservoir, pipe, dt, reference);
+            {
+                if (supply)
+                    spec.RelaySupply.Opened(opening).PassOneWay(mainReservoir, pipe, dt, reference);
+            }
             else if (exhaust)
                 spec.RelayExhaust.Opened(opening).Vent(pipe, dt, reference);
         }

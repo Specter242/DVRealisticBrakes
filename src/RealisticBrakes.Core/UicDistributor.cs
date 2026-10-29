@@ -79,6 +79,27 @@ namespace RealisticBrakes.Core
         public double MaximumCylinder { get; set; } = 3.8 * Air.Bar;
 
         /// <summary>
+        /// The cylinder pressure of an emergency, gauge Pa: a UIC distributor's
+        /// is its full service (NaN). An American coach's graduated-release
+        /// equipment gives more, as its triple valves did: an emergency
+        /// "equalize[s] at about 60 lb … instead of at 50 lb" (ICS p. 184).
+        /// </summary>
+        public double EmergencyCylinder { get; set; } = double.NaN;
+
+        /// <summary>A reduction past this, Pa, is an emergency (well past full service's 1.5 bar).</summary>
+        public double EmergencyReduction { get; set; } = 2.5 * Air.Bar;
+
+        /// <summary>
+        /// An American passenger coach's graduated-release equipment at the
+        /// game's 5 bar pipe (the 70 lb pipe of the PM and LN equipment; ICS
+        /// pp. 223–239): graduated on and off, quick to apply and release
+        /// (Passenger), full service at the freight car's 3.8 bar, and an
+        /// emergency about a sixth higher, 4.4 bar: as high as its auxiliary
+        /// reservoir, levelled with the cylinder, reaches.
+        /// </summary>
+        public static UicDistributorSpec AmericanCoach() => new UicDistributorSpec { EmergencyCylinder = 4.4 * Air.Bar };
+
+        /// <summary>
         /// The first stage's cylinder pressure, gauge Pa: the brake comes on
         /// at least this far at once, quickly, to take up the rigging (Pugi
         /// et al.: faster filling under 1.6 bar absolute; the figure is
@@ -327,10 +348,11 @@ namespace RealisticBrakes.Core
                 spec.QuickService.PassOneWay(pipe, QuickServiceChamber, dt);
                 deepestReduction = Math.Max(deepestReduction, reduction);
                 var target = spec.MaximumCylinder * reduction / spec.FullServiceReduction;
+                var emergency = !double.IsNaN(spec.EmergencyCylinder) && reduction > spec.EmergencyReduction;
                 // The first stage holds its minimum application until the driver starts to release.
                 if (reduction > deepestReduction - ReleasingMargin)
                     target = Math.Max(target, spec.FirstStageCylinder);
-                target = Math.Min(target, spec.MaximumCylinder);
+                target = emergency ? spec.EmergencyCylinder : Math.Min(target, spec.MaximumCylinder);
                 if (Load == LoadSetting.Empty)
                     target *= spec.EmptyRatio;
                 TargetCylinder = target;
