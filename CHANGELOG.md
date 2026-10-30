@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.0 (2026-10-30)
+
+- **The Air-Brake Pocket-Book:** an in-game booklet on how the brakes work,
+  for each engine's brake valve on European and American equipment, the
+  cars, and the settings. Spawn it from the mod's settings; press a line on
+  its contents page or a tab down its edge to turn to that chapter.
+- **The S-6 independent, with American equipment:** set the brake
+  equipment to American in the settings, and the steam engines' and DM3's
+  independent is the E-T's S-6, to go with their H-6 train brake. It isn't self-lapping: running, lap,
+  slow application, and quick application. It releases in running only
+  with the train brake in running too, and in lap it holds the engine's
+  brakes through a release. European equipment, the default, keeps the
+  self-lapping independent.
+- With American equipment, the H-6's equalizing reservoir charges from the
+  main reservoir in release and follows the brake pipe in running and
+  holding, and running feeds the pipe only up to 5 bar.
+- Closing an angle cock vents its hose, so an open cock coupled to a closed
+  one dumps the brake pipe, as on real cars.
+- Car levers on cars without a set position stand farther apart, and the
+  levers no longer knock each other back.
+- Trains driven by AI Traffic's AI keep the game's own brakes, which its
+  drivers are made for; a train a worker hands back gets this mod's.
+
 ## 1.1.0 (2026-10-28)
 
 - On American equipment, the steam engines and the DM3 have the E-T brake

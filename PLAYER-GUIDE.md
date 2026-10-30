@@ -68,7 +68,9 @@ while they recharge.
   The remote and driver mods use the handle's usual range only.
 - **Manual-lap handles** (the S282, S060, DM3, and the Custom Car Loader
   steamers): the handle's positions are release, running, lap, service,
-  and emergency.
+  and emergency. These engines get the E-T, the H-6 brake valve and the
+  S-6 independent, only with the brake equipment setting on **American**;
+  on European, the default, their independent is self-lapping.
   - **Release**, one notch before running, is new. It feeds the main
     reservoir straight into the pipe to release a long train quickly. It
     stays where you leave it, as on the real valve. Left there, it
@@ -140,10 +142,19 @@ while they recharge.
     press lets off some). What's left stays on. After an emergency from the
     engine's own handle, the brakes come back as soon as you let go, as on
     the real E-T.
+  - Its independent is the E-T's S-6, which isn't self-lapping: running,
+    lap, slow application, and quick application (sprung back to slow).
+    Slow application builds gradually up to 3.1 bar; lap it where you want
+    it. It lets go in running only with the train brake in running too, and
+    in lap it holds the engine's brakes through the train's release. Click
+    and hold for release.
 
 ## European or American equipment
 
-A setting chooses the cars' equipment. **European** is the default.
+The brake equipment setting chooses the cars' equipment and the steam
+engines' and DM3's brake valves. **European** is the default. Only
+**American** gives those engines the E-T: the H-6 brake valve, with
+holding, and the S-6 independent.
 
 - **European (UIC distributors):**
   - Releases in steps: let the pipe up a little and the brakes come off a
@@ -173,8 +184,9 @@ A setting chooses the cars' equipment. **European** is the default.
     gives them about a sixth more than full service.
   - The steam engines' air pump keeps the main reservoir about 1.4 bar
     over the pipe in running and holding, and up to 7.6 bar in lap and
-    service, as the real duplex governor did. The independent brake gives
-    up to 3.1 bar, and an emergency puts 4.5 bar in the engine's cylinders.
+    service, as the real duplex governor did. The independent brake is the
+    S-6 (see Bailing off), up to 3.1 bar, and an emergency puts 4.5 bar in
+    the engine's cylinders.
 
 ## Loaded and empty cars
 
@@ -188,11 +200,22 @@ the cylinders take their full pressure, but every car brakes with the force
 sized for it empty, so a loaded train takes much longer to stop. Use the retainers on long grades. A setting gives them the modern
 automatic empty/load equipment instead.
 
+## The brake booklet
+
+*The Air-Brake Pocket-Book*, after the Westinghouse instruction books: how
+the air brake works, each engine's brake valve on European and American
+equipment, the cars' valves, the levers at the car, the independent and
+bailing off, and the settings. In a loaded game, open the mod's settings and
+press **Spawn the brake booklet**; it appears in front of you. Press a line
+on its contents page, or a tab down its edge, to turn to that chapter. It
+isn't saved with the game: spawn it again after loading.
+
 ## Settings
 
 - **Run the realistic brake:** off gives the game's own brake back at once,
   from the pressures this one left.
-- **Car brake equipment:** European or American.
+- **Brake equipment:** European or American, for the cars and the steam
+  engines' and DM3's brake valves (American: the E-T's H-6 and S-6).
 - **Brake force from the car:** loaded and empty cars stop differently.
 - **American cars' load braking:** Period (no empty/load valve, the
   default) or EmptyLoad (automatic). Shown with American equipment.

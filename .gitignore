@@ -33,3 +33,6 @@ direction/
 *.pdf
 .env
 .env.*
+
+# The brake booklet's previews (art/booklet/make_booklet.py).
+art/booklet/pages/

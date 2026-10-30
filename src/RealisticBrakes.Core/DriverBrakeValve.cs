@@ -108,6 +108,11 @@ namespace RealisticBrakes.Core
         /// <summary>The equalizing reservoir's charging port from the main reservoir.</summary>
         public Orifice EqualizingCharge { get; set; } = new Orifice(1.2);
 
+ public bool EqualizingFollowsPipe { get; set; }
+
+        /// <summary>Cavity k's way between the pipe and chamber D in running and holding (inferred).</summary>
+        public Orifice EqualizingPort { get; set; } = new Orifice(3.0);
+
         /// <summary>The equalizing reservoir's service exhaust, which sets the service rate (inferred: 1.5 bar in about 5 s).</summary>
         public Orifice EqualizingExhaust { get; set; } = new Orifice(1.4);
 
@@ -167,6 +172,7 @@ namespace RealisticBrakes.Core
             spec.EqualizingCharge = new Orifice(2.0);
             spec.MaintainsInLap = false;
             spec.WarningPort = new Orifice(WarningBore);
+            spec.EqualizingFollowsPipe = true;
             return spec;
         }
 
@@ -263,7 +269,13 @@ namespace RealisticBrakes.Core
             switch (Position)
             {
                 case DriverValvePosition.Fill:
-                    if (spec.LetsDownRelease)
+                    if (spec.EqualizingFollowsPipe)
+                    {
+                        // Chamber D from the main reservoir through port j; running lets down what release put in the pipe.
+                        spec.EqualizingCharge.PassOneWay(mainReservoir, er, dt, running + spec.FillLimit);
+                        OverchargeLeft = Math.Max(spec.Overcharge, Math.Min(spec.FillLimit, pipe.Pressure - running));
+                    }
+                    else if (spec.LetsDownRelease)
                     {
                         // The equalizing reservoir charges with the pipe, so running lets down what release put in from where it stands.
                         spec.FillPort.PassOneWay(pipe, er, dt, running + spec.FillLimit);
@@ -285,8 +297,18 @@ namespace RealisticBrakes.Core
                     break;
             }
 
+            // Chamber D in running and holding: joined to the pipe, which the feed valve feeds to its setting (and lets an
+            // overcharge down with it).
+            var followsPipe = spec.EqualizingFollowsPipe
+                && (Position == DriverValvePosition.Running || Position == DriverValvePosition.Holding);
             var target = EqualizingTarget;
-            if (er.Pressure < target)
+            if (followsPipe)
+                spec.EqualizingPort.Pass(pipe, er, dt);
+            else if (spec.EqualizingFollowsPipe && Position == DriverValvePosition.Fill)
+            {
+                // Charged through port j above.
+            }
+            else if (er.Pressure < target)
                 spec.EqualizingCharge.PassOneWay(mainReservoir, er, dt, target);
             else if (er.Pressure > target)
             {
@@ -305,7 +327,11 @@ namespace RealisticBrakes.Core
                     spec.FillPort.PassOneWay(mainReservoir, pipe, dt, Air.Atmosphere + spec.Running + spec.FillLimit);
                 // The H-6 lapped or in service only exhausts the pipe; it feeds it in running, holding, and release.
                 var supply = spec.MaintainsInLap || (Position != DriverValvePosition.Lap && Position != DriverValvePosition.Apply);
-                Relay(mainReservoir, pipe, dt, exhaust: Position != DriverValvePosition.Fill, supply);
+                // The H-6's feed valve in running and holding feeds the pipe only up to its setting; an overcharge from release
+                // comes down slowly, as running lets it down (LetsDownRelease).
+                if (followsPipe)
+                    Relay(mainReservoir, pipe, dt, running, exhaust: false, supply);
+                Relay(mainReservoir, pipe, dt, followsPipe ? target : er.Pressure, exhaust: Position != DriverValvePosition.Fill, supply && !followsPipe);
             }
             var change = (pipe.Mass - pipeBefore) / dt;
             if (change > 0)
@@ -323,9 +349,9 @@ namespace RealisticBrakes.Core
             }
         }
 
-        private void Relay(Chamber mainReservoir, Chamber pipe, double dt, bool exhaust, bool supply = true)
+        // The relay holds the pipe to reference: the equalizing reservoir, or the H-6's feed valve setting in running and holding.
+        private void Relay(Chamber mainReservoir, Chamber pipe, double dt, double reference, bool exhaust, bool supply = true)
         {
-            var reference = EqualizingReservoir.Pressure;
             var error = pipe.Pressure - reference;
             var opening = (Math.Abs(error) - spec.RelayDeadBand) / spec.RelayBand;
             if (opening <= 0)

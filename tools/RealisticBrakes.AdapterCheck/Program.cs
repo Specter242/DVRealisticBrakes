@@ -63,6 +63,12 @@ namespace RealisticBrakes.AdapterCheck
 
             var field = AccessTools.Field(typeof(BrakeSystem), "mainReservoirPressureUnsmoothed");
             Check(field != null && field.FieldType == typeof(float), "BrakeSystem.mainReservoirPressureUnsmoothed is a float field");
+            var chapters = AccessTools.Field(typeof(ChapterSelector), "allChapters");
+            Check(chapters != null && chapters.FieldType == typeof(List<ChapterSelector.PageBookChapter>),
+                "a booklet's chapter selector keeps its chapters in a list, which the brake booklet sets to its thumb tabs");
+            var placed = AccessTools.Field(typeof(ItemPlacerOffset), "customRotationOffset");
+            Check(placed != null && placed.FieldType == typeof(UnityEngine.Vector3),
+                "an item's placer keeps its turn on the table in a Vector3, which the brake booklet sets to the vehicle catalog's");
 
             foreach (var name in Patches.StockAirPatches.Methods)
             {
@@ -181,6 +187,17 @@ namespace RealisticBrakes.AdapterCheck
                   && a.CylinderReleaseOpen
                   && Math.Abs(a.EmergencyReservoir.Pressure - 4.3e5) < 1 && european.Distributor.Load == RealisticBrakes.Core.LoadSetting.Loaded,
                 "an American valve's retainer, load, latch, bled cylinder, and emergency reservoir survive a save and load; a European car ignores them");
+
+            var et = new RealisticBrakes.Core.LocomotiveBrake(RealisticBrakes.Core.LocomotiveBrakeSpec.EtSteam(),
+                new RealisticBrakes.Core.DriverBrakeValve(RealisticBrakes.Core.DriverBrakeValveSpec.H6()));
+            et.HeldAutomatic = 1.5e5;
+            et.IndependentChamber.Pressure = 3.0e5;
+            var etJson = Newtonsoft.Json.Linq.JObject.Parse(Sim.SavedAir.Write(new RealisticBrakes.Core.CarBrake(20, geometry, locomotive: et)).ToString());
+            var et2 = new RealisticBrakes.Core.LocomotiveBrake(RealisticBrakes.Core.LocomotiveBrakeSpec.EtSteam(),
+                new RealisticBrakes.Core.DriverBrakeValve(RealisticBrakes.Core.DriverBrakeValveSpec.H6()));
+            Sim.SavedAir.Read(etJson, new RealisticBrakes.Core.CarBrake(20, geometry, locomotive: et2));
+            Check(Math.Abs(et2.HeldAutomatic - 1.5e5) < 1 && Math.Abs(et2.IndependentChamber.Pressure - 3.0e5) < 10,
+                "an E-T engine's held train brake and the S-6 independent's held air survive a save and load");
         }
 
         // The click on the independent lever (IndependentBailClick) rests on the

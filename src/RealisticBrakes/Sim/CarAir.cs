@@ -351,7 +351,10 @@ namespace RealisticBrakes.Sim
                 }
             }
             var independent = bs.independentBrakePosition;
-            engine.Independent = bs.hasIndependentBrake ? (bs.indBrakeCurve != null ? bs.indBrakeCurve.Evaluate(independent) : independent) : 0;
+            // The S-6's handle stands in positions, read from its own travel; a self-lapping one's through the game's curve.
+            engine.Independent = !bs.hasIndependentBrake ? 0
+                : engine.Spec.ManualLapIndependent || bs.indBrakeCurve == null ? independent
+                : bs.indBrakeCurve.Evaluate(independent);
 
             // The pump's own rate times the game's Main Reservoir Fill Time, as the stock compressor runs.
             var rate = bs.compressorProductionRate * pumpSpeedUp;

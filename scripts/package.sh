@@ -24,12 +24,16 @@ cp "$out/Info.json" "$out/RealisticBrakes.dll" "$out/RealisticBrakes.Core.dll" \
     "$mp/RealisticBrakes.Multiplayer.dll" "$repo/LICENSE" "$repo/CHANGELOG.md" "$stage/RealisticBrakes/"
 # The players' guide, as the mod's README.
 cp "$repo/PLAYER-GUIDE.md" "$stage/RealisticBrakes/README.md"
+# The brake booklet: its pages and their layout.
+mkdir "$stage/RealisticBrakes/Booklet"
+cp "$repo/src/RealisticBrakes/Booklet/booklet.json" "$repo/src/RealisticBrakes/Booklet/"page-*.jpg "$stage/RealisticBrakes/Booklet/"
 
 # Select the archive's contents explicitly; never include assemblies copied
 # for adapter checks, local settings, logs, or development documents.
 rm -f "$zipfile"
 (cd "$stage" && zip -q -X "$zipfile" RealisticBrakes/Info.json RealisticBrakes/RealisticBrakes.dll \
     RealisticBrakes/RealisticBrakes.Core.dll RealisticBrakes/RealisticBrakes.Multiplayer.dll \
-    RealisticBrakes/LICENSE RealisticBrakes/CHANGELOG.md RealisticBrakes/README.md)
+    RealisticBrakes/LICENSE RealisticBrakes/CHANGELOG.md RealisticBrakes/README.md \
+    RealisticBrakes/Booklet/booklet.json RealisticBrakes/Booklet/page-*.jpg)
 echo "Built $zipfile"
 (cd "$(dirname "$zipfile")" && sha256sum "$(basename "$zipfile")")

@@ -42,7 +42,7 @@ namespace RealisticBrakes.Controls
         };
 
         private const float FirstOffset = 0.2f;
-        private const float Spacing = 0.18f;
+        private const float Spacing = 0.28f;
         private const float Inset = 0.04f;
         private const float Scale = 1.8f;
         private const float LabelDrop = 0.1f;
@@ -126,12 +126,40 @@ namespace RealisticBrakes.Controls
 
  private void LateUpdate()
             {
+                if (!apart)
+                    KeepApart();
                 if (Car == null || Car.interior == null || (follower == null && !Car.TryGetComponent(out follower)) || follower.enabled)
                     return;
                 var car = Car.transform;
                 var interior = Car.interior;
                 if ((interior.position - car.position).sqrMagnitude > Off * Off || Quaternion.Angle(interior.rotation, car.rotation) > Turned)
                     follower.SyncPosition();
+            }
+
+            // Whether the levers' collisions with each other are still to be switched off.
+            private bool apart;
+
+            // The physics forgets ignored pairs when a collider is switched off: each time the row comes on, again.
+            private void OnEnable() => apart = false;
+
+            /// <summary>
+            /// Keeps the row's levers from striking each other. Each handle is
+            /// a sprung hinge with a rigidbody; swung against its neighbor it
+            /// was pushed back to its stop (TheIronWolf2003, 2026-10-29). Done
+            /// once the handles have woken, as a rigidbody added then would
+            /// renew their colliders.
+            /// </summary>
+            private void KeepApart()
+            {
+                apart = true;
+                var levers = new List<Collider[]>();
+                foreach (Transform holder in transform)
+                    levers.Add(holder.GetComponentsInChildren<Collider>(true));
+                for (var a = 0; a < levers.Count; a++)
+                    for (var b = a + 1; b < levers.Count; b++)
+                        foreach (var mine in levers[a])
+                            foreach (var theirs in levers[b])
+                                Physics.IgnoreCollision(mine, theirs);
             }
 
             private void OnDestroy()

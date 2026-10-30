@@ -46,20 +46,50 @@ namespace RealisticBrakes.Core
         {
             if (engine == null)
                 return null;
-            var independent = engine.Spec.IndependentMaximum * Math.Max(0, Math.Min(1, engine.Independent));
-            var text = independent < Shown
-                ? "Independent brake: released"
-                : $"Independent brake: {Bar(independent):F1} bar (of {Bar(engine.Spec.IndependentMaximum):F1})";
+            var s6 = engine.Spec.ManualLapIndependent;
+            string text;
+            if (s6)
+            {
+                // The S-6 stands in its positions and holds what it put in until it's let out.
+                var held = engine.IndependentCylinder;
+                text = "Independent brake: " + PositionName(engine.IndependentAt);
+                if (held >= Shown)
+                {
+                    text += $", {Bar(held):F1} bar";
+                    if (engine.IndependentAt == IndependentPosition.Running && !engine.ReleasePipeOpen)
+                        text += ", held until the train brake is in running";
+                }
+            }
+            else
+            {
+                var independent = engine.Spec.IndependentMaximum * Math.Max(0, Math.Min(1, engine.Independent));
+                text = independent < Shown
+                    ? "Independent brake: released"
+                    : $"Independent brake: {Bar(independent):F1} bar (of {Bar(engine.Spec.IndependentMaximum):F1})";
+            }
             var automatic = engine.AutomaticCylinder;
             var bailed = engine.AutomaticApplied ? engine.BailedOff : 0;
-            if (automatic < Shown && bailed < Shown)
-                return text;
-            text += $"; train brake on the engine {Bar(automatic):F1} bar";
-            if (bailed >= Shown)
-                text += $", {Bar(bailed):F1} bailed off";
-            if (clickToBail && automatic >= Shown)
+            var hint = clickToBail && (automatic >= Shown || (s6 && engine.IndependentCylinder >= Shown && !engine.ReleasePipeOpen));
+            if (automatic >= Shown || bailed >= Shown)
+            {
+                text += $"; train brake on the engine {Bar(automatic):F1} bar";
+                if (bailed >= Shown)
+                    text += $", {Bar(bailed):F1} bailed off";
+            }
+            if (hint)
                 text += engine.Spec.HoldsAutomaticBrake ? " (click and hold to bail off)" : " (click to bail off)";
             return text;
+        }
+
+        private static string PositionName(IndependentPosition position)
+        {
+            switch (position)
+            {
+                case IndependentPosition.Lap: return "lap";
+                case IndependentPosition.SlowApplication: return "slow application";
+                case IndependentPosition.QuickApplication: return "quick application";
+                default: return "running";
+            }
         }
 
         /// <summary>The brake valve's cut-out cock.</summary>

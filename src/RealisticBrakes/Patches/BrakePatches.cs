@@ -30,6 +30,11 @@ namespace RealisticBrakes.Patches
             Main.ReportOtherBrakeModsOnce();
             try
             {
+                if (BrakeSets.AiDriven(__instance))
+                {
+                    BrakeSets.LeaveToStock(__instance);
+                    return;
+                }
                 BrakeSets.Tick(__instance, dt);
             }
             catch (Exception e)

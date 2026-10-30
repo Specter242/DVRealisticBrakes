@@ -91,13 +91,149 @@ public class EtEquipmentTests
         Assert.InRange(EngineBar(parted), 4.4, 4.55);
     }
 
+    // The S-6's notches on the game's 0-1 handle: running, lap, slow application, quick application.
+    private const double Running = 0, Lap = 1.0 / 3, Slow = 2.0 / 3, Quick = 1;
+
     [Fact]
     public void TheS6GivesItsReducingValvesFortyFivePounds()
     {
         var rig = Train();
-        rig.Engine.Independent = 1;
+        rig.Engine.Independent = Quick;
         rig.Run(10);
         Assert.InRange(EngineBar(rig), 3.0, 3.15);
+        rig.Engine.Independent = Slow;
+        rig.Run(60);
+        Assert.InRange(EngineBar(rig), 3.0, 3.15);
+    }
+
+    [Fact]
+    public void SlowApplicationBuildsQuiteGraduallyAndQuickApplicationAtOnce()
+    {
+        // "Quite gradually ... very fine graduating" and "a sudden and heavy application" (Wood pp. 137-138).
+        var slow = Train();
+        slow.Engine.Independent = Slow;
+        var t = slow.RunUntil(() => EngineBar(slow) >= 3.0, 60);
+        Assert.InRange(t, 15, 25);
+        var quick = Train();
+        quick.Engine.Independent = Quick;
+        Assert.InRange(quick.RunUntil(() => EngineBar(quick) >= 3.0, 60), 1, 4);
+    }
+
+    [Fact]
+    public void LapHoldsWhatTheApplicationGave()
+    {
+        var rig = Train();
+        rig.Engine.Independent = Slow;
+        rig.Run(8);
+        rig.Engine.Independent = Lap;
+        rig.Run(2);
+        var held = EngineBar(rig);
+        Assert.InRange(held, 0.8, 2.2);
+        rig.Run(60);
+        Assert.InRange(EngineBar(rig), held - 0.03, held + 0.03);
+    }
+
+    [Fact]
+    public void RunningLetsTheIndependentGoOnlyWithTheAutomaticInRunning()
+    {
+        // The release pipe runs through the H-6, which opens it only in running (ICS p. 146).
+        var rig = Train();
+        rig.Engine.Independent = Quick;
+        rig.Run(5);
+        rig.Valve.Position = DriverValvePosition.Lap;
+        rig.Engine.Independent = Running;
+        rig.Run(20);
+        Assert.InRange(EngineBar(rig), 3.0, 3.15);
+        rig.Valve.Position = DriverValvePosition.Holding;
+        rig.Run(20);
+        Assert.InRange(EngineBar(rig), 3.0, 3.15);
+        rig.Valve.Position = DriverValvePosition.Running;
+        Assert.InRange(rig.RunUntil(() => EngineBar(rig) < 0.1, 30), 0, 6);
+    }
+
+    [Fact]
+    public void ALappedIndependentKeepsAnAutomaticApplicationThroughTheRecharge()
+    {
+        // In lap the S-6 blanks the release pipe: "the locomotive brake could not be released by returning the automatic brake
+        // valve handle to running position until the independent brake valve should be replaced in running position also"
+        // (Wood p. 137).
+        var rig = Train();
+        rig.Service(1.0);
+        rig.Run(30);
+        var applied = EngineBar(rig);
+        rig.Engine.Independent = Lap;
+        rig.Valve.Position = DriverValvePosition.Running;
+        rig.Run(60);
+        Assert.All(rig.Cars.Skip(1), c => Assert.False(c.ControlValve!.Applied));
+        Assert.InRange(EngineBar(rig), applied - 0.05, applied + 0.05);
+        rig.Engine.Independent = Running;
+        Assert.InRange(rig.RunUntil(() => EngineBar(rig) < 0.1, 30), 0, 6);
+    }
+
+    [Fact]
+    public void ReleaseLetsTheApplicationChamberOutAsFarAsItIsHeld()
+    {
+        // Held in release, the S-6 lets out the independent's air with the automatic's, graduated.
+        var rig = Train();
+        rig.Engine.Independent = Quick;
+        rig.Run(5);
+        rig.Engine.Independent = Lap;
+        rig.Valve.Position = DriverValvePosition.Lap;
+        rig.Run(2);
+        Assert.Equal(1.0, rig.Engine.BailOffBy(1.0 * Air.Bar) / Air.Bar, 6);
+        rig.Run(10);
+        Assert.InRange(EngineBar(rig), 2.0, 2.15);
+    }
+
+    [Fact]
+    public void ChamberDLagsThePipeInReleaseAndFollowsItInRunning()
+    {
+        // Release blows main reservoir air into chamber D through a small port; running joins it to the pipe, "so that chamber D
+        // and the equalizing reservoir charge uniformly with the brake pipe" (ICS p. 138).
+        var rig = Train(30);
+        rig.Service(1.5);
+        rig.Run(30);
+        rig.Valve.Position = DriverValvePosition.Fill;
+        rig.Run(3);
+        var pipe = rig.Cars[0].PipeSection.GaugeBar;
+        var er = rig.Valve.EqualizingReservoir.GaugeBar;
+        Assert.True(er < pipe - 0.2, $"in release chamber D stood at {er:F2} bar, the pipe at the engine {pipe:F2}");
+        rig.Valve.Position = DriverValvePosition.Running;
+        rig.Run(10);
+        pipe = rig.Cars[0].PipeSection.GaugeBar;
+        er = rig.Valve.EqualizingReservoir.GaugeBar;
+        Assert.InRange(er, pipe - 0.1, pipe + 0.1);
+        // The feed valve feeds the pipe only to its 5 bar: as the train takes release's air, the pipe and chamber D settle there.
+        rig.Run(240);
+        pipe = rig.Cars[0].PipeSection.GaugeBar;
+        er = rig.Valve.EqualizingReservoir.GaugeBar;
+        Assert.InRange(er, pipe - 0.05, pipe + 0.05);
+        Assert.InRange(er, 4.9, 5.1);
+    }
+
+    [Fact]
+    public void ALapBeforeChamberDHasCaughtUpBringsThePipeDownToIt()
+    {
+        // Lapped straight from release, the equalizing piston lets the pipe at the engine down to chamber D's pressure.
+        var rig = Train(30);
+        rig.Service(1.5);
+        rig.Run(30);
+        rig.Valve.Position = DriverValvePosition.Fill;
+        rig.Run(3);
+        rig.Valve.Position = DriverValvePosition.Lap;
+        var er = rig.Valve.EqualizingReservoir.GaugeBar;
+        rig.Run(5);
+        Assert.InRange(rig.Cars[0].PipeSection.GaugeBar, er - 0.15, er + 0.1);
+    }
+
+    [Fact]
+    public void TheS6PositionsAreBandsOfTheHandle()
+    {
+        Assert.Equal(IndependentPosition.Running, LocomotiveBrake.PositionOf(0));
+        Assert.Equal(IndependentPosition.Running, LocomotiveBrake.PositionOf(0.1));
+        Assert.Equal(IndependentPosition.Lap, LocomotiveBrake.PositionOf(1.0 / 3));
+        Assert.Equal(IndependentPosition.SlowApplication, LocomotiveBrake.PositionOf(2.0 / 3));
+        Assert.Equal(IndependentPosition.QuickApplication, LocomotiveBrake.PositionOf(1));
     }
 
     [Fact]

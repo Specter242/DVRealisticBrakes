@@ -35,6 +35,7 @@ namespace RealisticBrakes
             modEntry.OnGUI = _ =>
             {
                 Settings.Draw(modEntry);
+                DrawBooklet();
             };
             modEntry.OnSaveGUI = _ => Settings.Save(modEntry);
 
@@ -112,6 +113,20 @@ namespace RealisticBrakes
             var copies = AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetName().Name == Assembly.GetExecutingAssembly().GetName().Name);
             if (copies > 1)
                 Mod.Logger.Warning($"{assembly} loaded a second copy of Realistic Brakes: its link may not reach the running mod");
+        }
+
+        // The brake booklet's spawn button, in a loaded game.
+        private static void DrawBooklet()
+        {
+            GUILayout.Space(8f);
+            GUILayout.Label(Controls.BrakeBooklet.Title);
+            if (!Controls.BrakeBooklet.CanSpawn)
+            {
+                GUILayout.Label("Load a game to spawn the brake booklet here. It isn't saved: spawn it again after loading.");
+                return;
+            }
+            if (GUILayout.Button("Spawn the brake booklet", GUILayout.ExpandWidth(false)))
+                Controls.BrakeBooklet.Spawn();
         }
 
 

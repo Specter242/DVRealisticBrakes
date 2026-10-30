@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using DV.Simulation.Brake;
+using HarmonyLib;
 using RealisticBrakes.Core;
 using UnityEngine;
 
@@ -47,6 +49,48 @@ namespace RealisticBrakes.Sim
                     air.RestoreForce();
         }
 
+        // AI Traffic's driver (Killermops27's AITraffic.Driver.AIEngineer, put on its train's lead engine), looked up by name once.
+        private static Type aiDriver;
+        private static bool aiDriverLooked;
+
+ public static bool AiDriven(Brakeset set)
+        {
+            if (!aiDriverLooked)
+            {
+                aiDriverLooked = true;
+                aiDriver = AccessTools.TypeByName("AITraffic.Driver.AIEngineer");
+                if (aiDriver != null)
+                    Main.Mod?.Logger.Log("AI Traffic is here: the trains its drivers run keep the game's own brake");
+            }
+            if (aiDriver == null)
+                return false;
+            foreach (var system in set.cars)
+                if (system != null && system.hasCompressor)
+                {
+                    var car = TrainCar.Resolve(system.gameObject);
+                    if (car != null && car.GetComponent(aiDriver) != null)
+                        return true;
+                }
+            return false;
+        }
+
+        /// <summary>
+        /// Leaves <paramref name="set"/> to the game's own brake: its cars'
+        /// air is forgotten and their force given back, so the stock brake
+        /// runs them; if the driver leaves (a worker hands the train over), the
+        /// model takes them on afresh from the stock brake's pressures.
+        /// </summary>
+        public static void LeaveToStock(Brakeset set)
+        {
+            lines.Remove(set);
+            foreach (var system in set.cars)
+                if (system != null && cars.TryGetValue(system, out var air))
+                {
+                    air.RestoreForce();
+                    cars.Remove(system);
+                }
+        }
+
         /// <summary>The line running <paramref name="set"/>, if built.</summary>
         public static bool TryGetLine(Brakeset set, out BrakeLine line) => lines.TryGetValue(set, out line);
 
@@ -67,8 +111,9 @@ namespace RealisticBrakes.Sim
         /// <summary>Whether the model ran <paramref name="system"/>'s car this frame.</summary>
         public static bool Handles(BrakeSystem system) => Main.Active && TryGet(system, out var air) && air.Handled;
 
-        // A pipe end is open to the air with its cock open and no hose coupled to it.
-        private static bool Open(HoseAndCock hose) => hose != null && hose.connectedTo == null && hose.cockOpen;
+ internal static bool Vents(HoseAndCock hose) =>
+            hose != null && hose.cockOpen && (hose.connectedTo == null || !hose.connectedTo.cockOpen);
+
 
         /// <summary>Advances <paramref name="set"/>'s air <paramref name="dt"/> s and writes it back to the stock fields.</summary>
         public static void Tick(Brakeset set, float dt)
@@ -81,8 +126,8 @@ namespace RealisticBrakes.Sim
             var line = LineFor(set);
             var pumpSpeedUp = set.firstCar.gameParams?.CompressorProductionModifier ?? 1f;
             var pipe = line.Pipe;
-            var frontOpen = Open(set.GetEndmost(front: true));
-            var rearOpen = Open(set.GetEndmost(front: false));
+            var frontOpen = Vents(set.GetEndmost(front: true));
+            var rearOpen = Vents(set.GetEndmost(front: false));
             var changed = frontOpen != pipe.FrontOpen || rearOpen != pipe.RearOpen;
             pipe.FrontOpen = frontOpen;
             pipe.RearOpen = rearOpen;

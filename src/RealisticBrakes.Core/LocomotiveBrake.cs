@@ -70,6 +70,33 @@ namespace RealisticBrakes.Core
         /// <summary>A reduction past this, Pa, is an emergency (well past full service's 1.5 bar).</summary>
         public double EmergencyReduction { get; set; } = 2.5 * Air.Bar;
 
+ public bool ManualLapIndependent { get; set; }
+
+        /// <summary>
+        /// The S-6's slow application port from the reducing valve: "a very
+        /// small port ... permits reducing valve pressure to flow quite
+        /// gradually to the application cylinder ... permitting very fine
+        /// graduating" (Wood p. 137). Inferred: the full 45 lb in about 20 s.
+        /// </summary>
+        public Orifice SlowApplication { get; set; } = new Orifice(0.52);
+
+        /// <summary>
+        /// The S-6's quick application port: "a larger port ... a sudden and
+        /// heavy application" (Wood p. 138). Inferred: the full 45 lb in about 2 s.
+        /// </summary>
+        public Orifice QuickApplication { get; set; } = new Orifice(1.6);
+
+        /// <summary>
+        /// The way out for the application chamber in running: the
+        /// distributing valve's release pipe through the S-6 and the H-6's
+        /// running position to the air (ICS p. 146). Inferred: the engine off
+        /// as soon as the automatic's release in running lets it go.
+        /// </summary>
+        public Orifice IndependentRelease { get; set; } = new Orifice(3.0);
+
+        /// <summary>The application chamber the S-6 fills, m³ (inferred).</summary>
+        public double ApplicationChamberVolume { get; set; } = 0.002;
+
         /// <summary>
         /// Whether the air pump's governor is the E-T's duplex governor: in
         /// running and holding it holds the main reservoir "only 20 pounds or so
@@ -102,6 +129,7 @@ namespace RealisticBrakes.Core
             var spec = new LocomotiveBrakeSpec
             {
                 HoldsAutomaticBrake = true,
+                ManualLapIndependent = true,
                 EmergencyCylinder = 4.5 * Air.Bar,
                 OwnEmergencyCylinder = 4.7 * Air.Bar,
                 IndependentMaximum = 3.1 * Air.Bar,
@@ -135,6 +163,7 @@ namespace RealisticBrakes.Core
             Cylinder = new Chamber(this.spec.CylinderVolume);
             Distributor = new UicDistributor(this.spec.Distributor) { Mode = BrakingMode.Passenger };
             DriverValve = driverValve;
+            IndependentChamber = new Chamber(this.spec.ApplicationChamberVolume);
         }
 
         public LocomotiveBrakeSpec Spec => spec;
@@ -148,8 +177,39 @@ namespace RealisticBrakes.Core
         /// <summary>The driver's brake valve, or null on an engine without one.</summary>
         public DriverBrakeValve DriverValve { get; }
 
-        /// <summary>The independent brake handle, 0 released to 1 full.</summary>
+        /// <summary>The independent brake handle, 0 released to 1 full; on the S-6, its positions (<see cref="IndependentAt"/>).</summary>
         public double Independent { get; set; }
+
+        /// <summary>Where the S-6's handle stands (<see cref="LocomotiveBrakeSpec.ManualLapIndependent"/>).</summary>
+        public IndependentPosition IndependentAt => PositionOf(Independent);
+
+        /// <summary>
+        /// The S-6 position of a handle at <paramref name="handle"/> on the
+        /// game's 0–1 scale: its four notches at 0, ⅓, ⅔, and 1, each standing
+        /// for the band around it, so a value set from outside (a remote, a
+        /// multiple-unit lead, another mod) lands in one.
+        /// </summary>
+        public static IndependentPosition PositionOf(double handle) =>
+            handle < 1.0 / 6 ? IndependentPosition.Running
+            : handle < 0.5 ? IndependentPosition.Lap
+            : handle < 5.0 / 6 ? IndependentPosition.SlowApplication
+            : IndependentPosition.QuickApplication;
+
+        /// <summary>The independent's air in the distributing valve's application chamber, on the S-6.</summary>
+        public Chamber IndependentChamber { get; }
+
+        /// <summary>The independent's application, gauge Pa: the S-6's held air, or the self-lapping handle's.</summary>
+        public double IndependentCylinder { get; private set; }
+
+        /// <summary>
+        /// Whether the application chamber can let its air out in running:
+        /// the distributing valve released and the H-6 in running (or no valve
+        /// of its own working). "The locomotive brakes ... can be released by
+        /// placing the independent brake valve in running position" only "if
+        /// the automatic brake valve is also in running position" (Wood p. 136;
+        /// ICS p. 146).
+        /// </summary>
+        public bool ReleasePipeOpen => LetsAutomaticGoAtValve && !AutomaticApplied;
 
         /// <summary>The automatic application bailed off, gauge Pa.</summary>
         public double BailedOff { get; set; }
@@ -163,7 +223,12 @@ namespace RealisticBrakes.Core
         public double HeldAutomatic { get; set; }
 
         // Whether the automatic handle lets an E-T engine's brake go: in running, or with no valve of its own working (a trailing or dead engine).
-        private bool LetsAutomaticGo => DriverValve == null || !DriverValve.CutIn || DriverValve.Position == DriverValvePosition.Running;
+        private bool LetsAutomaticGoAtValve => DriverValve == null || !DriverValve.CutIn || DriverValve.Position == DriverValvePosition.Running;
+
+        // And the S-6 in running too: in lap and the application positions it blanks the release pipe, "the locomotive brake
+        // could not be released by returning the automatic brake valve handle to running position until the independent brake
+        // valve should be replaced in running position also" (Wood p. 137).
+        private bool LetsAutomaticGo => LetsAutomaticGoAtValve && (!spec.ManualLapIndependent || IndependentAt == IndependentPosition.Running);
 
         // The automatic application standing, gauge Pa, before any bail.
         private double StandingAutomatic => spec.HoldsAutomaticBrake ? HeldAutomatic : Math.Max(Distributor.Applied ? Distributor.TargetCylinder : 0, Pilot);
@@ -178,14 +243,15 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double BailOff()
         {
+            var vented = VentIndependent(double.PositiveInfinity);
             if (!Distributor.Applied && !(spec.HoldsAutomaticBrake && HeldAutomatic > 0))
-                return 0;
+                return vented;
             // In the engine's own emergency on the E-T it lets off only for the moment it's held (BailHold).
             bailing = Math.Max(bailing, BailHold);
             var standing = StandingAutomatic;
             var bailed = Math.Max(0, standing - BailedOff);
             BailedOff = standing;
-            return bailed;
+            return Math.Max(bailed, vented);
         }
 
         /// <summary>
@@ -203,10 +269,24 @@ namespace RealisticBrakes.Core
             bailing = Math.Max(bailing, hold);
             if (amount <= 0)
                 return 0;
+            // The S-6 in release lets the whole application chamber out: its own air as well as the automatic's.
+            var vented = VentIndependent(amount);
             var standing = StandingAutomatic;
             var was = BailedOff;
             BailedOff = Math.Min(standing, BailedOff + amount);
-            return Math.Max(0, BailedOff - was);
+            return Math.Max(Math.Max(0, BailedOff - was), vented);
+        }
+
+        // Lets up to amount, gauge Pa, of the S-6's air out of the application chamber; returns what went.
+        private double VentIndependent(double amount)
+        {
+            if (!spec.ManualLapIndependent)
+                return 0;
+            var was = Math.Max(0, IndependentChamber.Pressure - Air.Atmosphere);
+            var now = Math.Max(0, was - amount);
+            IndependentChamber.Pressure = Air.Atmosphere + now;
+            IndependentCylinder = Math.Min(IndependentCylinder, now);
+            return was - now;
         }
 
         /// <summary>
@@ -324,7 +404,8 @@ namespace RealisticBrakes.Core
                 BailedOff = Math.Max(0, Math.Min(BailedOff, Distributor.Applied ? Math.Max(Distributor.TargetCylinder, pilot) : pilot));
                 automatic = Math.Max(0, pilot - BailedOff);
             }
-            var independent = spec.IndependentMaximum * Math.Max(0, Math.Min(1, Independent));
+            var independent = spec.ManualLapIndependent ? StepIndependent(dt) : spec.IndependentMaximum * Math.Max(0, Math.Min(1, Independent));
+            IndependentCylinder = independent;
             AutomaticCylinder = automatic;
             TargetCylinder = Math.Max(automatic, independent);
             var target = Air.Atmosphere + TargetCylinder;
@@ -337,5 +418,42 @@ namespace RealisticBrakes.Core
                 ExhaustFlow = spec.CylinderExhaust.Vent(Cylinder, dt, target) / dt;
             MainReservoirDraw = (before - MainReservoir.Mass) / dt;
         }
+
+        // The S-6 for dt s: reducing-valve air in through the slow or quick port, up to the valve's 45 lb; held in lap; let out in
+        // running through the release pipe when it's open. Returns the independent's application, gauge Pa.
+        private double StepIndependent(double dt)
+        {
+            var reducing = Air.Atmosphere + spec.IndependentMaximum;
+            switch (IndependentAt)
+            {
+                case IndependentPosition.SlowApplication:
+                    spec.SlowApplication.PassOneWay(MainReservoir, IndependentChamber, dt, reducing);
+                    break;
+                case IndependentPosition.QuickApplication:
+                    spec.QuickApplication.PassOneWay(MainReservoir, IndependentChamber, dt, reducing);
+                    break;
+                case IndependentPosition.Running:
+                    if (ReleasePipeOpen)
+                        spec.IndependentRelease.Vent(IndependentChamber, dt);
+                    break;
+            }
+            return Math.Max(0, IndependentChamber.Pressure - Air.Atmosphere);
+        }
+    }
+
+    /// <summary>The S-6 independent brake valve's handle positions past release, which is sprung back to running (ICS p. 145).</summary>
+    public enum IndependentPosition
+    {
+        /// <summary>The release pipe open through to the automatic brake valve: the engine's brakes go with it in running.</summary>
+        Running,
+
+        /// <summary>Every port blanked: the application holds, and the automatic can't release the engine.</summary>
+        Lap,
+
+        /// <summary>Reducing-valve air into the application chamber through a very small port, for a fine application.</summary>
+        SlowApplication,
+
+        /// <summary>Through a larger port: a sudden, heavy application. Sprung back to slow application.</summary>
+        QuickApplication,
     }
 }

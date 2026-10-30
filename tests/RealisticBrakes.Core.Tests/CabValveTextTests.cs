@@ -43,20 +43,49 @@ public class CabValveTextTests
     }
 
     [Fact]
-    public void TheIndependentShowsItsOwnAndTheTrainBrakesApplication()
+    public void TheS6ShowsItsPositionItsOwnAndTheTrainBrakesApplication()
     {
         var rig = Steam();
+        Assert.Equal("Independent brake: running", CabValveText.Independent(rig.Engine, true));
+        rig.Engine.Independent = 1;
+        rig.Run(5);
+        rig.Engine.Independent = 1.0 / 3;
+        rig.Run(1);
+        Assert.Matches(@"^Independent brake: lap, 3\.\d bar$", CabValveText.Independent(rig.Engine, true));
+        rig.Engine.Independent = 2.0 / 3;
+        Assert.StartsWith("Independent brake: slow application", CabValveText.Independent(rig.Engine, true));
+        rig.Engine.Independent = 0;
+        rig.Run(10);
+        Assert.Equal("Independent brake: running", CabValveText.Independent(rig.Engine, true));
+        rig.Service(1.5);
+        rig.Run(30);
+        Assert.Matches(@"^Independent brake: running; train brake on the engine 3\.\d bar \(click and hold to bail off\)$", CabValveText.Independent(rig.Engine, true));
+        rig.Engine.BailOffBy(1.0 * Air.Bar);
+        rig.Run(1);
+        Assert.Matches(@"^Independent brake: running; train brake on the engine 2\.\d bar, 1\.0 bailed off \(click and hold to bail off\)$", CabValveText.Independent(rig.Engine, true));
+        Assert.DoesNotContain("bail off)", CabValveText.Independent(rig.Engine, false));
+    }
+
+    [Fact]
+    public void AnIndependentAppliedWithTheTrainBrakeOutOfRunningWaitsForIt()
+    {
+        var rig = Steam();
+        rig.Engine.Independent = 1;
+        rig.Run(5);
+        rig.Valve.Position = DriverValvePosition.Lap;
+        rig.Engine.Independent = 0;
+        rig.Run(2);
+        Assert.Matches(@"^Independent brake: running, 3\.\d bar, held until the train brake is in running \(click and hold to bail off\)$",
+            CabValveText.Independent(rig.Engine, true));
+    }
+
+    [Fact]
+    public void ASelfLappingIndependentShowsItsPressure()
+    {
+        var rig = new Rig(5);
         Assert.Equal("Independent brake: released", CabValveText.Independent(rig.Engine, true));
         rig.Engine.Independent = 0.5;
         rig.Run(1);
-        Assert.Equal("Independent brake: 1.6 bar (of 3.1)", CabValveText.Independent(rig.Engine, true));
-        rig.Engine.Independent = 0;
-        rig.Service(1.5);
-        rig.Run(30);
-        Assert.Matches(@"^Independent brake: released; train brake on the engine 3\.\d bar \(click and hold to bail off\)$", CabValveText.Independent(rig.Engine, true));
-        rig.Engine.BailOffBy(1.0 * Air.Bar);
-        rig.Run(1);
-        Assert.Matches(@"^Independent brake: released; train brake on the engine 2\.\d bar, 1\.0 bailed off \(click and hold to bail off\)$", CabValveText.Independent(rig.Engine, true));
-        Assert.DoesNotContain("bail off)", CabValveText.Independent(rig.Engine, false));
+        Assert.Equal("Independent brake: 1.9 bar (of 3.8)", CabValveText.Independent(rig.Engine, true));
     }
 }

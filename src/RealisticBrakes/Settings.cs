@@ -29,7 +29,7 @@ namespace RealisticBrakes
         [Draw("Run the realistic brake (off: the game's own brake runs, from the pressures this one left)")]
         public bool Enabled = true;
 
-        [Draw("Car brake equipment: European (UIC distributors, graduated release, G/P) or American (AB valves, direct release, retainers, emergency reservoirs). Changing it re-reads every car", DrawType.ToggleGroup)]
+        [Draw("Brake equipment, for the cars and the steam engines and DM3: European (UIC distributors, graduated release, G/P; the engines keep a self-lapping independent) or American (AB valves, direct release, retainers, emergency reservoirs; the engines get the E-T, its H-6 brake valve and S-6 independent). Changing it re-reads every car", DrawType.ToggleGroup)]
         public Equipment Equipment = Equipment.European;
 
         [Draw("Freight cars brake with their own force, not their load's: a loaded car stops slower than an empty one, and each car's empty/loaded valve, set from its load, matters")]

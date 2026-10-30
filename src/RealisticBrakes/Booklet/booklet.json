@@ -1,0 +1,88 @@
+{
+  "edition": "1.2.0",
+  "size": [
+    1224,
+    1584
+  ],
+  "pages": [
+    "page-01.jpg",
+    "page-02.jpg",
+    "page-03.jpg",
+    "page-04.jpg",
+    "page-05.jpg",
+    "page-06.jpg",
+    "page-07.jpg",
+    "page-08.jpg",
+    "page-09.jpg",
+    "page-10.jpg",
+    "page-11.jpg",
+    "page-12.jpg",
+    "page-13.jpg",
+    "page-14.jpg",
+    "page-15.jpg"
+  ],
+  "tabs": {
+    "x0": 1136,
+    "x1": 1224,
+    "y0": 190,
+    "y1": 1450,
+    "items": [
+      {
+        "label": "CONTENTS",
+        "first": 1,
+        "last": 1
+      },
+      {
+        "label": "THE AIR BRAKE",
+        "first": 2,
+        "last": 2
+      },
+      {
+        "label": "EUROPEAN",
+        "first": 3,
+        "last": 5
+      },
+      {
+        "label": "AMERICAN",
+        "first": 6,
+        "last": 11
+      },
+      {
+        "label": "AT THE CAR",
+        "first": 12,
+        "last": 12
+      },
+      {
+        "label": "THE ENGINE",
+        "first": 13,
+        "last": 13
+      },
+      {
+        "label": "SETTINGS",
+        "first": 14,
+        "last": 14
+      }
+    ]
+  },
+  "contents": {
+    "page": 1,
+    "x0": 90,
+    "x1": 1100,
+    "y0": 300,
+    "rowHeight": 74,
+    "targets": [
+      2,
+      3,
+      3,
+      4,
+      5,
+      6,
+      6,
+      7,
+      10,
+      12,
+      13,
+      14
+    ]
+  }
+}

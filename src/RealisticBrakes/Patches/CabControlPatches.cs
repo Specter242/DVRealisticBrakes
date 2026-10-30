@@ -10,6 +10,7 @@ namespace RealisticBrakes.Patches
     /// As each cab's controls are found:
     /// <list type="bullet">
     /// <item>watches the independent brake lever for a click to bail off (<see cref="IndependentBailClick"/>);</item>
+    /// <item>makes an E-T engine's independent the S-6 (<see cref="IndependentHandle"/>);</item>
     /// <item>gives the brake controls text by the cursor saying where they stand (<see cref="CabValveHover"/>);</item>
     /// <item>widens the train brake handle (<see cref="TrainBrakeHandle"/>) before it builds its joint a frame later;</item>
     /// <item>adds the equalizing reservoir's hand to a steam engine's gauges (<see cref="BrakeGauges"/>).</item>
@@ -32,6 +33,11 @@ namespace RealisticBrakes.Patches
             Try("brake valve text", () => CabValveHover.Attach(__instance, __instance.Car));
             if (!Main.Active)
                 return;
+            Try("the S-6 independent", () =>
+            {
+                if (__instance.TryGetControl(InteriorControlsManager.ControlType.IndBrake, out var lever) && lever.controlImplBase != null)
+                    IndependentHandle.Fit(lever.controlImplBase, __instance.Car);
+            });
             // A handle widened without both of its value patches would read the new notches as stock values.
             Try("the train brake handle", () =>
             {

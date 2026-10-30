@@ -56,6 +56,9 @@ namespace RealisticBrakes.Sim
                 entry["bailed"] = CarAir.Bar(engine.BailedOff);
                 if (engine.HeldAutomatic > 0)
                     entry["held"] = CarAir.Bar(engine.HeldAutomatic);
+                // The S-6's air held in the application chamber, as a lapped independent leaves it.
+                if (engine.Spec.ManualLapIndependent && engine.IndependentChamber.Pressure > Air.Atmosphere + 1000)
+                    entry["independent"] = CarAir.Bar(engine.IndependentChamber.Pressure);
                 if (engine.DriverValve != null)
                 {
                     entry["er"] = CarAir.Bar(engine.DriverValve.EqualizingReservoir.Pressure);
@@ -157,6 +160,9 @@ namespace RealisticBrakes.Sim
                 // An E-T engine's brake held through release (none on other engines).
                 if (engine.Spec.HoldsAutomaticBrake)
                     engine.HeldAutomatic = ((float?)entry["held"] ?? 0f) * Air.Bar;
+                var independent = (float?)entry["independent"];
+                if (engine.Spec.ManualLapIndependent)
+                    engine.IndependentChamber.Pressure = independent.HasValue ? CarAir.Pa(independent.Value) : Air.Atmosphere;
                 if (engine.DriverValve != null)
                 {
                     var er = (float?)entry["er"];
