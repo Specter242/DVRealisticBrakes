@@ -69,6 +69,9 @@ namespace RealisticBrakes.AdapterCheck
             var placed = AccessTools.Field(typeof(ItemPlacerOffset), "customRotationOffset");
             Check(placed != null && placed.FieldType == typeof(UnityEngine.Vector3),
                 "an item's placer keeps its turn on the table in a Vector3, which the brake booklet sets to the vehicle catalog's");
+            var notchAngle = AccessTools.Field(typeof(SteppedJoint), "cachedAngle");
+            Check(notchAngle != null && notchAngle.FieldType == typeof(float),
+                "a notched lever keeps the angle it last aimed its spring from in a float, which the S-6 handle clears to re-aim it");
 
             foreach (var name in Patches.StockAirPatches.Methods)
             {

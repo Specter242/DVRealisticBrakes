@@ -47,4 +47,14 @@ public class HoldingTests
     public void ACutBendingOverACrestPullsBothWays() =>
         // Half on 1 % up, half on 1 % down: nothing pulls it either way.
         Assert.True(Holding.Holds(Cut(5, 0, 1).Concat(Cut(5, 0, -1)).ToArray()));
+
+    [Fact]
+    public void TheWardale5ATsKssPluginKeepsItsEngineAndTendersForceWhileItRuns()
+    {
+        Assert.True(Holding.ForceKeptByOtherMod("PROTO5AT", wardaleBrakesActive: true));
+        Assert.True(Holding.ForceKeptByOtherMod("PROTO5AT_tender", wardaleBrakesActive: true));
+        Assert.False(Holding.ForceKeptByOtherMod("PROTO5AT", wardaleBrakesActive: false));
+        Assert.False(Holding.ForceKeptByOtherMod("LocoS282A", wardaleBrakesActive: true));
+        Assert.False(Holding.ForceKeptByOtherMod(null, wardaleBrakesActive: true));
+    }
 }

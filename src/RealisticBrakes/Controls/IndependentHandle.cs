@@ -1,4 +1,5 @@
 using DV.CabControls;
+using HarmonyLib;
 using RealisticBrakes.Core;
 using UnityEngine;
 using Lever = DV.CabControls.Spec.Lever;
@@ -15,6 +16,13 @@ namespace RealisticBrakes.Controls
 
         private ControlImplBase control;
         private bool sprungByJoint;
+        private SteppedJoint joint;
+
+        // The game's notched lever re-aims its spring only when its angle changes (SteppedJoint.Update, against this). A key,
+        // the scroll wheel, or the mouse holding the handle in quick application turns the spring off; let go once the
+        // handle had settled there, the spring came back on still aimed at quick application, and the handle stayed (Torun,
+        // 2026-10-30: "the spring kind of breaks"; Lonoxmont's handle "jam[med] into fast apply").
+        private static readonly AccessTools.FieldRef<SteppedJoint, float> cachedAngle = AccessTools.FieldRefAccess<SteppedJoint, float>("cachedAngle");
 
         /// <summary>Whether <paramref name="car"/>'s independent is the S-6: an American engine with a manual-lap train brake (as <see cref="Sim.CarAir"/> fits the E-T).</summary>
         public static bool IsS6(TrainCar car)
@@ -61,6 +69,15 @@ namespace RealisticBrakes.Controls
         {
             if (control != null)
                 control.Ungrabbed -= OnUngrabbed;
+        }
+
+        // Let go in quick application, a stepped handle's spring is made to re-aim, at slow application, the next frame.
+        private void LateUpdate()
+        {
+            if (!sprungByJoint || control == null || (joint == null && (joint = GetComponent<SteppedJoint>()) == null))
+                return;
+            if (joint.isSpringActive && !control.IsGrabbed() && LocomotiveBrake.PositionOf(control.Value) == IndependentPosition.QuickApplication)
+                cachedAngle(joint) = float.NaN;
         }
 
         // Let go in quick application, a smooth handle goes back to slow application, as the S-6's return spring takes it.

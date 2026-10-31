@@ -64,5 +64,13 @@ namespace RealisticBrakes.Core
 
         /// <summary>Whether the cut's brakes hold it where it stands.</summary>
         public static bool Holds(IReadOnlyCollection<HeldCar> cars) => HoldingForce(cars) >= Pull(cars);
+
+        /// <summary>The Wardale 5AT's Kss brake plugin's mod ID (JimTaplin's Wardale_Brakes, an optional file of Nexus mod 1770).</summary>
+        public const string WardaleBrakesId = "Wardale_Brakes";
+
+        private static readonly string[] wardaleBrakesCars = { "PROTO5AT", "PROTO5AT_tender" };
+
+ public static bool ForceKeptByOtherMod(string carTypeId, bool wardaleBrakesActive) =>
+            wardaleBrakesActive && carTypeId != null && Array.IndexOf(wardaleBrakesCars, carTypeId) >= 0;
     }
 }

@@ -5,6 +5,7 @@ using DV.Utils;
 using HarmonyLib;
 using RealisticBrakes.Core;
 using UnityEngine;
+using UnityModManagerNet;
 
 namespace RealisticBrakes.Sim
 {
@@ -88,6 +89,7 @@ namespace RealisticBrakes.Sim
         {
             var unweighed = Fresh(set);
             var holds = unweighed || Weigh(set);
+            var frozen = false;
             foreach (var car in set.cars)
             {
                 var brakes = car.brakeSystem;
@@ -97,14 +99,80 @@ namespace RealisticBrakes.Sim
                 if (target < Braked && !unweighed)
                     continue;
                 var factor = holds ? Mathf.Max(target, Frozen) : Mathf.Min(target, Free);
-                // The same force at the new factor; none for an unbraked car frozen.
-                var basePerKg = BasePerKg(car);
-                foreach (var bogie in car.Bogies)
-                    if (bogie != null)
-                        bogie.maxBrakingForcePerKg = basePerKg * Mathf.Max(0f, target) / factor;
+                // The same force at the new factor; none for an unbraked car frozen. Not where another mod keeps the force.
+                if (!ForceKeptByOtherMod(car))
+                {
+                    var basePerKg = BasePerKg(car);
+                    foreach (var bogie in car.Bogies)
+                        if (bogie != null)
+                            bogie.maxBrakingForcePerKg = basePerKg * Mathf.Max(0f, target) / factor;
+                }
                 SetFactor(brakes, factor);
                 scaledNow.Add(car);
+                frozen |= holds;
             }
+            if (frozen && !Net.IsGuest)
+                StopCreep(set);
+        }
+
+        // The game freezes a slow car only under a hair of speed, 0.01 m/s on the level to 0.1 at 5°, and below 0.1 m/s fades
+        // its brake force with its speed (Bogie.FixedUpdate). A cut its brakes hold, once something set it moving past the
+        // freeze, came back to rest only if its brakes were several times gravity's pull (about 5 times on 1 %): one that
+        // only just held crept on for good, at the speed where its faded force met the pull, about 0.1 m/s (Torun,
+        // 2026-10-31, after a cut slid: "the slightest amount of motion which then adds up over time"; and "some sort of
+        // small impulse ... as a result of client-host interaction" to set it going). Its brakes hold it, as a real car's
+        // do at a standstill, so it's stopped and the game's freeze takes it. The host's, which owns movement. Only a cut
+        // without an engine: a train starting before its rear has released is pulled by its engine, not creeping.
+        private static void StopCreep(Trainset set)
+        {
+            var creeping = false;
+            foreach (var car in set.cars)
+            {
+                if (car == null)
+                    continue;
+                if (car.IsLoco)
+                    return;
+                var x = Mathf.Abs(car.transform.localEulerAngles.x);
+                var degrees = x > 180f ? Mathf.Abs(x - 360f) : x;
+                // On 5° and steeper the game doesn't freeze, and neither does this.
+                if (degrees >= 5f)
+                    return;
+                creeping |= Mathf.Abs(car.GetForwardSpeed()) > Mathf.Lerp(0.01f, 0.1f, Mathf.InverseLerp(0f, 5f, degrees));
+            }
+            if (!creeping)
+                return;
+            foreach (var car in set.cars)
+            {
+                if (car == null)
+                    continue;
+                Stop(car.rb);
+                foreach (var bogie in car.Bogies)
+                    if (bogie != null)
+                        Stop(bogie.rb);
+            }
+        }
+
+        private static void Stop(Rigidbody body)
+        {
+            if (body == null || body.isKinematic)
+                return;
+            body.velocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+
+        // The Wardale 5AT's Kss brake plugin, when it runs: it keeps the 5AT's force per kg (Holding.ForceKeptByOtherMod).
+        private static UnityModManager.ModEntry wardaleBrakes;
+        private static bool lookedForWardaleBrakes;
+
+        private static bool ForceKeptByOtherMod(TrainCar car)
+        {
+            if (!lookedForWardaleBrakes)
+            {
+                wardaleBrakes = UnityModManager.FindMod(Holding.WardaleBrakesId);
+                lookedForWardaleBrakes = true;
+            }
+            var type = car.carLivery != null ? car.carLivery.parentType : null;
+            return Holding.ForceKeptByOtherMod(type != null ? type.id : null, wardaleBrakes != null && wardaleBrakes.Active);
         }
 
         private static void SetFactor(BrakeSystem brakes, float factor)
@@ -187,9 +255,10 @@ namespace RealisticBrakes.Sim
         {
             // With the model off, the game's force: the rigging's isn't kept up then.
             var perKg = Main.Active ? BasePerKg(car) : StockPerKg(car);
-            foreach (var bogie in car.Bogies)
-                if (bogie != null)
-                    bogie.maxBrakingForcePerKg = perKg;
+            if (!ForceKeptByOtherMod(car))
+                foreach (var bogie in car.Bogies)
+                    if (bogie != null)
+                        bogie.maxBrakingForcePerKg = perKg;
             var brakes = car.brakeSystem;
             if (brakes != null)
                 SetFactor(brakes, brakes.unaffectedTargetBrakingFactor * brakes.heatController.overheatReductionFactor);

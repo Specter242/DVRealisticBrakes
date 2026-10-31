@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.1 (2026-10-31)
+
+- The S-6 independent's handle springs back from quick application when let
+  go, even after it's been held there with a key, the scroll wheel, or the
+  mouse.
+- On American equipment a closed angle cock keeps its hose's air, as AAR
+  cocks do: close the side you keep, and the open side dumps when the hoses
+  part. Only European end cocks vent.
+- A standing cut whose brakes hold it comes back to rest after a nudge,
+  instead of creeping away.
+- The Wardale 5AT's Kss brake plugin works with Realistic Brakes.
+
 ## 1.2.0 (2026-10-30)
 
 - **The Air-Brake Pocket-Book:** an in-game booklet on how the brakes work,

@@ -112,7 +112,8 @@ namespace RealisticBrakes.Sim
         public static bool Handles(BrakeSystem system) => Main.Active && TryGet(system, out var air) && air.Handled;
 
  internal static bool Vents(HoseAndCock hose) =>
-            hose != null && hose.cockOpen && (hose.connectedTo == null || !hose.connectedTo.cockOpen);
+            hose != null && hose.cockOpen
+            && (hose.connectedTo == null || (!hose.connectedTo.cockOpen && Main.Settings.Equipment == Equipment.European));
 
 
         /// <summary>Advances <paramref name="set"/>'s air <paramref name="dt"/> s and writes it back to the stock fields.</summary>
