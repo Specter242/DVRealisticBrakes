@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.2 (2026-10-31)
+
+- Tenders brake with their engine: the independent, the train brake, and
+  bailing off act on the tender too, and it has no car levers of its own.
+- The S-6 independent has a release position, the notch below running,
+  sprung back to running: hold the handle there to bail the engine off. It
+  replaces the click and hold, which a handle without notches keeps. An S-6
+  handle saved in lap may come back in running; set it again.
+- American cars' emergency reservoirs keep their air through a release, as
+  the AB valve's did, and give it only in an emergency or to the bleed rod.
+- The brake booklet is given once, into your inventory with the game's own
+  booklets, on a new game or the next time a save loads. It's saved with
+  the game and yours to keep or throw away; the settings' button spawns
+  another.
+
 ## 1.2.1 (2026-10-31)
 
 - The S-6 independent's handle springs back from quick application when let

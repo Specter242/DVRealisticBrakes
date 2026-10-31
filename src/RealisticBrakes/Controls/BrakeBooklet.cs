@@ -6,12 +6,10 @@ using System.Linq;
 using DV.Booklets.Rendered;
 using DV.CabControls;
 using DV.Items;
-using DV.ThingTypes;
 using DV.Utils;
 using HarmonyLib;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
-using ItemSpec = DV.CabControls.Spec.Item;
 using TouchscreenSpec = DV.CabControls.Spec.Touchscreen;
 
 namespace RealisticBrakes.Controls
@@ -20,8 +18,15 @@ namespace RealisticBrakes.Controls
     {
         private const string BasePrefab = "MapSchematic";
 
+        /// <summary>The booklet's item name in saves and the starting items.</summary>
+        public const string PrefabName = "RealisticBrakes_BrakeBooklet";
+
         /// <summary>The booklet's name in the inventory.</summary>
         public const string Title = "The Air-Brake Pocket-Book";
+
+        /// <summary>What the inventory says of it.</summary>
+        public const string Description = "How the air brake works: each engine's brake valve on European and American equipment, " +
+            "the cars, and the settings. Press a line on its contents page, or a tab down its edge, to turn to that chapter.";
 
         // The schematic map's page, m: its paper mesh's 0.297 x 0.42 at the paper's 0.78 x 0.715. The page image's
         // left edge is at +x and its top at -z (read from the game's assets, 2026-10-29).
@@ -30,30 +35,77 @@ namespace RealisticBrakes.Controls
 
         private static Texture2D[] pages;
         private static JObject manifest;
+        private static GameObject template;
+        private static bool failed;
+
+        // The contents page, the page each of its rows opens, and the map's page buttons' inset from its corners (m),
+        // as the template was refitted: each copy's BookletLinks reads them.
+        internal static int ContentsPage { get; private set; }
+        internal static int[] Targets { get; private set; } = new int[0];
+        internal static Vector2? ButtonInset { get; private set; }
 
         /// <summary>Whether a game is loaded to spawn the booklet in.</summary>
         public static bool CanSpawn => PlayerManager.PlayerTransform != null;
 
-        /// <summary>Puts the booklet in front of the player.</summary>
+        /// <summary>
+        /// The refitted booklet every copy is made from, built the first time it's wanted and kept inactive for the
+        /// session; null if it couldn't be built.
+        /// </summary>
+        public static GameObject Template
+        {
+            get
+            {
+                if (template == null && !failed)
+                {
+                    template = Build();
+                    failed = template == null;
+                }
+                return template;
+            }
+        }
+
+        /// <summary>A copy of the booklet at <paramref name="position"/>, awake; null without a template.</summary>
+        public static GameObject Make(Vector3 position, Quaternion rotation)
+        {
+            if (Template == null)
+                return null;
+            var booklet = UnityEngine.Object.Instantiate(Template, position, rotation);
+            booklet.name = PrefabName;
+            return booklet;
+        }
+
+        /// <summary>Puts another booklet in front of the player.</summary>
         public static void Spawn()
         {
-            if (!CanSpawn || !Load())
+            if (!CanSpawn)
                 return;
-            var prefab = Resources.Load<GameObject>(BasePrefab);
-            if (prefab == null)
-            {
-                Main.Mod?.Logger.Warning($"The brake booklet needs the game's {BasePrefab} booklet, which it doesn't have");
-                return;
-            }
             var player = PlayerManager.PlayerTransform;
             var forward = Vector3.ProjectOnPlane(player.forward, Vector3.up).normalized;
             if (forward.sqrMagnitude < 0.5f)
                 forward = Vector3.forward;
-            // Made inside an inactive holder, so nothing on it wakes before it is refitted. Its page's top is its -z:
-            // turned so, it lands reading the right way up to the player.
-            var holder = new GameObject("[Realistic Brakes booklet holder]");
+            // Its page's top is its -z: turned so, it lands reading the right way up to the player.
+            var booklet = Make(player.position + forward * 0.6f + Vector3.up * 1.2f, Quaternion.LookRotation(-forward));
+            if (booklet == null)
+                return;
+            booklet.GetComponent<InventoryItemSpec>().BelongsToPlayer = true;
+            booklet.AddComponent<BookletDelivery>();
+        }
+
+        private static GameObject Build()
+        {
+            if (!Load())
+                return null;
+            var prefab = Resources.Load<GameObject>(BasePrefab);
+            if (prefab == null)
+            {
+                Main.Mod?.Logger.Warning($"The brake booklet needs the game's {BasePrefab} booklet, which it doesn't have");
+                return null;
+            }
+            // Made inside an inactive holder that lasts the session, so the template never wakes; its copies do.
+            var holder = new GameObject("[Realistic Brakes booklet]");
             holder.SetActive(false);
-            var booklet = UnityEngine.Object.Instantiate(prefab, player.position + forward * 0.6f + Vector3.up * 1.2f, Quaternion.LookRotation(-forward), holder.transform);
+            UnityEngine.Object.DontDestroyOnLoad(holder);
+            var booklet = UnityEngine.Object.Instantiate(prefab, holder.transform, false);
             try
             {
                 Refit(booklet);
@@ -62,11 +114,10 @@ namespace RealisticBrakes.Controls
             {
                 Main.Mod?.Logger.Warning($"The brake booklet couldn't be made: {e.GetBaseException().GetType().Name}: {e.GetBaseException().Message}");
                 UnityEngine.Object.Destroy(holder);
-                return;
+                return null;
             }
-            booklet.name = "RealisticBrakesBooklet";
-            booklet.transform.SetParent(null, true);
-            UnityEngine.Object.Destroy(holder);
+            booklet.name = PrefabName;
+            return booklet;
         }
 
         // The pages and their layout, read once; the textures stay for the session.
@@ -118,14 +169,20 @@ namespace RealisticBrakes.Controls
             book.currentPage = 0;
             book.generateOnStart = true;
 
+            // Saved under its own name, not the map's; named and described by BookletName, as the name the spec takes
+            // isn't copied with it. The inventory's icons are the cover's middle: the map's would show a map.
             var spec = booklet.GetComponent<InventoryItemSpec>();
+            AccessTools.Field(typeof(InventoryItemSpec), "itemPrefabName").SetValue(spec, PrefabName);
+            // An ordinary item, not an essential one: the player may throw it away.
             spec.IsEssential = false;
             spec.ImmuneToDumpster = false;
-            spec.BelongsToPlayer = true;
-            spec.NameOverride = Title;
-            // Never saved: saved, it would load as the game's map.
-            booklet.GetComponent<ItemSpec>().excludeFromStorageSerialization =
-                StorageType.Inventory | StorageType.LostAndFound | StorageType.World | StorageType.InstalledGadgets | StorageType.ItemContainers;
+            booklet.AddComponent<BookletName>();
+            var cover = pages[0];
+            var side = Mathf.Min(cover.width, cover.height);
+            var icon = Sprite.Create(cover, new Rect(0f, (cover.height - side) / 2f, side, side), new Vector2(0.5f, 0.5f));
+            icon.name = "RealisticBrakes booklet icon";
+            icon.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            spec.ItemIconSprite = spec.ItemIconSpriteSimple = spec.ItemIconSpriteDropped = icon;
 
             booklet.GetComponent<CustomNonVrGrabAnchor>().customLocalRotation = new Vector3(90f, 180f, 0f);
             AccessTools.Field(typeof(ItemPlacerOffset), "customRotationOffset").SetValue(booklet.GetComponent<ItemPlacerOffset>(), new Vector3(0f, 180f, 0f));
@@ -152,8 +209,10 @@ namespace RealisticBrakes.Controls
             var rows = targets.Length * (float)contents["rowHeight"];
             var rowScreen = booklet.transform.Find("TouchScreenMapAnchor/Touchscreen");
             Place(rowScreen, (float)contents["x0"], (float)contents["x1"], y0, y0 + rows, false, new Vector2Int(1, targets.Length));
-            var buttonInset = mapButton != null ? new Vector2(Mathf.Abs(mapButton.localPosition.x), Mathf.Abs(mapButton.localPosition.z)) : (Vector2?)null;
-            booklet.AddComponent<BookletLinks>().Set(book, rowScreen.gameObject, (int)contents["page"], targets, buttonInset);
+            ContentsPage = (int)contents["page"];
+            Targets = targets;
+            ButtonInset = mapButton != null ? new Vector2(Mathf.Abs(mapButton.localPosition.x), Mathf.Abs(mapButton.localPosition.z)) : (Vector2?)null;
+            booklet.AddComponent<BookletLinks>();
         }
 
         private static void SetPose(Transform anchor, Vector3 position, Quaternion rotation)
@@ -203,44 +262,24 @@ namespace RealisticBrakes.Controls
         private PageBook book;
         private GameObject rowScreen;
         private TouchscreenBase rows;
-        private int contentsPage;
-        private int[] targets;
-        private Vector2? buttonInset;
-
-        public void Set(PageBook book, GameObject rowScreen, int contentsPage, int[] targets, Vector2? buttonInset)
-        {
-            this.book = book;
-            this.rowScreen = rowScreen;
-            this.contentsPage = contentsPage;
-            this.targets = targets;
-            this.buttonInset = buttonInset;
-        }
 
         // After every Awake: the touchscreen's control is added as its spec wakes.
         private IEnumerator Start()
         {
-            rows = rowScreen.GetComponent<TouchscreenBase>();
-            if (rows == null)
+            book = GetComponent<PageBook>();
+            var screen = transform.Find("TouchScreenMapAnchor/Touchscreen");
+            rowScreen = screen != null ? screen.gameObject : null;
+            rows = rowScreen != null ? rowScreen.GetComponent<TouchscreenBase>() : null;
+            if (book == null || rows == null)
             {
                 Main.Mod?.Logger.Warning("The brake booklet's contents have no touchscreen: its lines won't turn the page");
                 yield break;
             }
             rows.SectionPressed += OnPressed;
             book.PageFlipped += OnFlipped;
-            // A frame, then into the world's storage, as the shop delivers an item.
+            // A frame: the game's page buttons are made with the pages.
             yield return null;
             FitPageButtons();
-            var item = GetComponent<ItemBase>();
-            if (item != null)
-            {
-                SingletonBehaviour<StorageController>.Instance.AddItemToWorldStorage(item);
-                if (item.ItemRigidbody != null)
-                {
-                    item.ItemRigidbody.velocity = Vector3.zero;
-                    item.ItemRigidbody.angularVelocity = Vector3.zero;
-                }
-            }
-            Notice.Show(BrakeBooklet.Title + " is in front of you");
             while (!rows.IsInitialized)
                 yield return null;
             OnFlipped(book.currentPage);
@@ -258,26 +297,59 @@ namespace RealisticBrakes.Controls
         // as the map's are.
         private void FitPageButtons()
         {
-            var helper = buttonInset.HasValue ? GetComponentInChildren<DV.Interaction.PageFlippingHelper>(true) : null;
+            var inset = BrakeBooklet.ButtonInset;
+            var helper = inset.HasValue ? GetComponentInChildren<DV.Interaction.PageFlippingHelper>(true) : null;
             if (helper == null)
                 return;
             foreach (Transform button in helper.transform)
             {
                 var p = button.localPosition;
-                button.localPosition = new Vector3(Mathf.Sign(p.x) * buttonInset.Value.x, p.y, Mathf.Sign(p.z) * buttonInset.Value.y);
+                button.localPosition = new Vector3(Mathf.Sign(p.x) * inset.Value.x, p.y, Mathf.Sign(p.z) * inset.Value.y);
             }
         }
 
         private void OnFlipped(int page)
         {
             if (rows != null && rows.IsInitialized)
-                rowScreen.SetActive(page == contentsPage);
+                rowScreen.SetActive(page == BrakeBooklet.ContentsPage);
         }
 
         private void OnPressed(Vector2Int section)
         {
-            if (section.y >= 0 && section.y < targets.Length && book.currentPage == contentsPage)
+            var targets = BrakeBooklet.Targets;
+            if (section.y >= 0 && section.y < targets.Length && book.currentPage == BrakeBooklet.ContentsPage)
                 book.FlipTo(targets[section.y]);
         }
+    }
+
+    /// <summary>A booklet spawned from the settings: a frame on, into the world's storage, as the shop delivers an item.</summary>
+    internal sealed class BookletDelivery : MonoBehaviour
+    {
+        private IEnumerator Start()
+        {
+            yield return null;
+            var item = GetComponent<ItemBase>();
+            if (item != null)
+            {
+                SingletonBehaviour<StorageController>.Instance.AddItemToWorldStorage(item);
+                if (item.ItemRigidbody != null)
+                {
+                    item.ItemRigidbody.velocity = Vector3.zero;
+                    item.ItemRigidbody.angularVelocity = Vector3.zero;
+                }
+            }
+            Notice.Show(BrakeBooklet.Title + " is in front of you");
+            Destroy(this);
+        }
+    }
+
+    /// <summary>The booklet's name and description in the inventory: the name a spec takes isn't copied with the template.</summary>
+    internal sealed class BookletName : MonoBehaviour, IInventoryItemLocalizer
+    {
+        private void Awake() => GetComponent<InventoryItemSpec>().NameOverride = BrakeBooklet.Title;
+
+        public string GetNameParam() => BrakeBooklet.Title;
+
+        public string GetCustomDescription() => BrakeBooklet.Description;
     }
 }

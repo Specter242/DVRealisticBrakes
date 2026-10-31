@@ -183,17 +183,17 @@ namespace RealisticBrakes.Core
         /// <summary>Where the S-6's handle stands (<see cref="LocomotiveBrakeSpec.ManualLapIndependent"/>).</summary>
         public IndependentPosition IndependentAt => PositionOf(Independent);
 
-        /// <summary>
-        /// The S-6 position of a handle at <paramref name="handle"/> on the
-        /// game's 0–1 scale: its four notches at 0, ⅓, ⅔, and 1, each standing
-        /// for the band around it, so a value set from outside (a remote, a
-        /// multiple-unit lead, another mod) lands in one.
-        /// </summary>
-        public static IndependentPosition PositionOf(double handle) =>
-            handle < 1.0 / 6 ? IndependentPosition.Running
-            : handle < 0.5 ? IndependentPosition.Lap
-            : handle < 5.0 / 6 ? IndependentPosition.SlowApplication
+ public static IndependentPosition PositionOf(double handle) =>
+            handle < 0.375 ? IndependentPosition.Running
+            : handle < 0.625 ? IndependentPosition.Lap
+            : handle < 0.875 ? IndependentPosition.SlowApplication
             : IndependentPosition.QuickApplication;
+
+        /// <summary>Whether an S-6 handle at <paramref name="handle"/> stands in release, the notch below running (<see cref="PositionOf"/>).</summary>
+        public static bool InRelease(double handle) => handle < 0.125;
+
+        /// <summary>Whether the independent counts as held in release now: a bail held (<see cref="BailOffBy"/>), as the S-6 in release does.</summary>
+        public bool HeldInRelease => bailing > 0;
 
         /// <summary>The independent's air in the distributing valve's application chamber, on the S-6.</summary>
         public Chamber IndependentChamber { get; }

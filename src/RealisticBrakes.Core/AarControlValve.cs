@@ -123,9 +123,6 @@ namespace RealisticBrakes.Core
         /// <summary>The emergency reservoir's charging choke, in release only.</summary>
         public Orifice EmergencyCharging { get; set; } = new Orifice(1.3);
 
-        /// <summary>The accelerated release: emergency reservoir air into the pipe as a service release begins.</summary>
-        public Orifice AcceleratedRelease { get; set; } = new Orifice(2.0);
-
         /// <summary>
         /// The bleed rod's drain, which empties the auxiliary and emergency
         /// reservoirs while the rod is held: both in about 50 s (inferred).
@@ -156,9 +153,7 @@ namespace RealisticBrakes.Core
 
         /// <summary>
         /// The retarded release's exhaust: set so the head end of a long train
-        /// lets go with the rear, about 24 s after a full service on 50 cars.
-        /// The accelerated release already carries a release down the train
-        /// quickly, so the head end only waits a few seconds more.
+        /// lets go with the rear, about 14 s after a full service on 50 cars.
         /// </summary>
         public Orifice RetardedReleasePort { get; set; } = new Orifice(RetardedReleaseBore);
 
@@ -203,7 +198,6 @@ namespace RealisticBrakes.Core
         private readonly Restriction auxiliaryBackflow;
         private readonly Chamber[] chambers;
         private bool quickServiceDone;
-        private bool acceleratingRelease;
 
         public AarControlValve(AarControlValveSpec spec = null)
         {
@@ -313,7 +307,6 @@ namespace RealisticBrakes.Core
             Applied = false;
             Emergency = false;
             quickServiceDone = false;
-            acceleratingRelease = false;
         }
 
         /// <summary>
@@ -329,7 +322,6 @@ namespace RealisticBrakes.Core
             Applied = cylinder > Air.FromGaugeBar(0.1);
             Emergency = false;
             quickServiceDone = Applied;
-            acceleratingRelease = false;
             CylinderReleaseOpen = false;
         }
 
@@ -395,7 +387,6 @@ namespace RealisticBrakes.Core
             {
                 Emergency = true;
                 Applied = true;
-                acceleratingRelease = false;
             }
 
             var lead = AuxiliaryReservoir.Pressure - pipe.Pressure;
@@ -407,7 +398,6 @@ namespace RealisticBrakes.Core
             {
                 Applied = true;
                 quickServiceDone = false;
-                acceleratingRelease = false;
             }
 
             // Released, the brake cylinder release valve resets.
@@ -469,17 +459,10 @@ namespace RealisticBrakes.Core
                     }
                 }
             }
-            else if (acceleratingRelease)
-            {
-                exhausted += Exhaust(dt, false);
-                if (spec.AcceleratedRelease.PassOneWay(EmergencyReservoir, pipe, dt) <= 0)
-                    acceleratingRelease = false;
-            }
             else
             {
                 // Near the engine, the pipe stands well over the reservoir: a retarded release, and a slow recharge. Further
-                // back the pipe rises no faster than the reservoir charges, and the car releases in full. (The emergency
-                // reservoir's own air raises the pipe at every car, so it doesn't count while it flows.)
+                // back the pipe rises no faster than the reservoir charges, and the car releases in full.
                 Retarded = spec.RetardedRelease && pipe.Pressure - AuxiliaryReservoir.Pressure > spec.RetardThreshold;
                 exhausted += Exhaust(dt, Retarded);
                 var charging = Retarded ? dt * spec.RetardedChargeShare : dt;
@@ -495,8 +478,6 @@ namespace RealisticBrakes.Core
 
         private void Release()
         {
-            // A service release starts with the emergency reservoir's air into the pipe; after an emergency that air is in the cylinder.
-            acceleratingRelease = !Emergency;
             Applied = false;
             Emergency = false;
         }

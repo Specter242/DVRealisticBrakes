@@ -122,7 +122,7 @@ namespace RealisticBrakes
             GUILayout.Label(Controls.BrakeBooklet.Title);
             if (!Controls.BrakeBooklet.CanSpawn)
             {
-                GUILayout.Label("Load a game to spawn the brake booklet here. It isn't saved: spawn it again after loading.");
+                GUILayout.Label("The brake booklet is in your inventory with the game's other booklets. Load a game to spawn another here.");
                 return;
             }
             if (GUILayout.Button("Spawn the brake booklet", GUILayout.ExpandWidth(false)))

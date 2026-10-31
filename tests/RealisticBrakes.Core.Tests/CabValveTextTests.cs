@@ -49,10 +49,10 @@ public class CabValveTextTests
         Assert.Equal("Independent brake: running", CabValveText.Independent(rig.Engine, true));
         rig.Engine.Independent = 1;
         rig.Run(5);
-        rig.Engine.Independent = 1.0 / 3;
+        rig.Engine.Independent = 0.5;
         rig.Run(1);
         Assert.Matches(@"^Independent brake: lap, 3\.\d bar$", CabValveText.Independent(rig.Engine, true));
-        rig.Engine.Independent = 2.0 / 3;
+        rig.Engine.Independent = 0.75;
         Assert.StartsWith("Independent brake: slow application", CabValveText.Independent(rig.Engine, true));
         rig.Engine.Independent = 0;
         rig.Run(10);
@@ -64,6 +64,11 @@ public class CabValveTextTests
         rig.Run(1);
         Assert.Matches(@"^Independent brake: running; train brake on the engine 2\.\d bar, 1\.0 bailed off \(click and hold to bail off\)$", CabValveText.Independent(rig.Engine, true));
         Assert.DoesNotContain("bail off)", CabValveText.Independent(rig.Engine, false));
+        // A handle with a release notch says so, the click setting aside; held there, it reads release.
+        Assert.EndsWith("(hold the handle in release, below running, to bail off)", CabValveText.Independent(rig.Engine, false, releaseNotch: true));
+        rig.Engine.BailOffBy(0.1 * Air.Bar);
+        Assert.StartsWith("Independent brake: release;", CabValveText.Independent(rig.Engine, true, releaseNotch: true));
+        Assert.DoesNotContain("bail off)", CabValveText.Independent(rig.Engine, true, releaseNotch: true));
     }
 
     [Fact]

@@ -43,6 +43,8 @@ namespace RealisticBrakes.Controls
         private const float SendEvery = 0.25f;
 
         private ControlImplBase control;
+        private IndependentHandle handle;
+        private bool notchHeld;
         private VRTK_InteractableObject vrLever;
         private float grabbedAt = float.NegativeInfinity;
         private float valueAtGrab;
@@ -105,7 +107,9 @@ namespace RealisticBrakes.Controls
             if (Graduated(Car))
             {
                 if (AutomaticApplied(Car))
-                    Notice.Show(vrLever != null
+                    Notice.Show(ReleaseNotch
+                        ? "Hold the independent in release, below running, to bail off: the S-6 bails off for as long as you hold it there"
+                        : vrLever != null
                         ? "Hold the independent lever and press the trigger to bail off: each press lets off some"
                         : "Click and hold the independent lever to bail off: the E-T bails off for as long as you hold it");
                 return;
@@ -126,7 +130,8 @@ namespace RealisticBrakes.Controls
         // while it's held and the trigger bails (the review, 2026-10-28).
         private void Update()
         {
-            if (float.IsNegativeInfinity(grabbedAt) || control == null || vrLever != null)
+            // A handle with the release notch bails there instead (HoldRelease).
+            if (float.IsNegativeInfinity(grabbedAt) || control == null || vrLever != null || ReleaseNotch)
                 return;
             var still = Mathf.Abs(control.Value - valueAtGrab) < ClickTravel;
             if (!still || Time.time - grabbedAt <= ClickTime || !Main.Active || !Main.Settings.ClickToBailOff || Car == null || !Graduated(Car))
@@ -149,10 +154,43 @@ namespace RealisticBrakes.Controls
             Net.Report(new NetAction(Car, NetActionKind.Bail, FullBail, 0));
         }
 
-        // A graduated bail of amount, Pa, here; sent on now if send, or with the next.
-        private void BailBy(double amount, bool send)
+        // Whether this lever is the S-6 handle with the release notch (IndependentHandle).
+        private bool ReleaseNotch
         {
-            if (!Main.Active || !Main.Settings.ClickToBailOff || Car == null)
+            get
+            {
+                if (handle == null)
+                    handle = GetComponent<IndependentHandle>();
+                return handle != null && handle.HasReleaseNotch;
+            }
+        }
+
+        /// <summary>
+        /// The S-6 handle held in release (<see cref="IndependentHandle"/>), or no longer: it bails off at
+        /// <see cref="BailRate"/> while held, as the S-6 in release does, and the hold ends when it's let go. The S-6's own
+        /// release, not the click, so the click setting doesn't turn it off.
+        /// </summary>
+        internal void HoldRelease(bool held)
+        {
+            if (held)
+            {
+                notchHeld = true;
+                holdingRelease = true;
+                BailBy(BailRate * Time.deltaTime, false, notch: true);
+                if (Time.time - sentAt >= SendEvery)
+                    Send();
+            }
+            else if (notchHeld)
+            {
+                notchHeld = false;
+                EndHold();
+            }
+        }
+
+        // A graduated bail of amount, Pa, here; sent on now if send, or with the next. The click's unless notch.
+        private void BailBy(double amount, bool send, bool notch = false)
+        {
+            if (!Main.Active || (!notch && !Main.Settings.ClickToBailOff) || Car == null)
                 return;
             var bailed = BailConsist(Car, false, amount);
             unsent += bailed;

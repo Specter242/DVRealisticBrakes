@@ -40,9 +40,10 @@ namespace RealisticBrakes.Core
         /// <summary>
         /// The independent brake's application, and the train brake's on the
         /// engine with what's bailed off; with how to bail, if
-        /// <paramref name="clickToBail"/>.
+        /// <paramref name="clickToBail"/>, or by the S-6 handle's release notch
+        /// where it has one (<paramref name="releaseNotch"/>).
         /// </summary>
-        public static string Independent(LocomotiveBrake engine, bool clickToBail)
+        public static string Independent(LocomotiveBrake engine, bool clickToBail, bool releaseNotch = false)
         {
             if (engine == null)
                 return null;
@@ -52,7 +53,7 @@ namespace RealisticBrakes.Core
             {
                 // The S-6 stands in its positions and holds what it put in until it's let out.
                 var held = engine.IndependentCylinder;
-                text = "Independent brake: " + PositionName(engine.IndependentAt);
+                text = "Independent brake: " + (engine.HeldInRelease ? "release" : PositionName(engine.IndependentAt));
                 if (held >= Shown)
                 {
                     text += $", {Bar(held):F1} bar";
@@ -69,7 +70,9 @@ namespace RealisticBrakes.Core
             }
             var automatic = engine.AutomaticCylinder;
             var bailed = engine.AutomaticApplied ? engine.BailedOff : 0;
-            var hint = clickToBail && (automatic >= Shown || (s6 && engine.IndependentCylinder >= Shown && !engine.ReleasePipeOpen));
+            var notch = s6 && releaseNotch;
+            var hint = (clickToBail || notch) && !engine.HeldInRelease
+                && (automatic >= Shown || (s6 && engine.IndependentCylinder >= Shown && !engine.ReleasePipeOpen));
             if (automatic >= Shown || bailed >= Shown)
             {
                 text += $"; train brake on the engine {Bar(automatic):F1} bar";
@@ -77,7 +80,8 @@ namespace RealisticBrakes.Core
                     text += $", {Bar(bailed):F1} bailed off";
             }
             if (hint)
-                text += engine.Spec.HoldsAutomaticBrake ? " (click and hold to bail off)" : " (click to bail off)";
+                text += notch ? " (hold the handle in release, below running, to bail off)"
+                    : engine.Spec.HoldsAutomaticBrake ? " (click and hold to bail off)" : " (click to bail off)";
             return text;
         }
 

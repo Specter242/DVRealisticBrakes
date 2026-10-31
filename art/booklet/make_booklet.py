@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.2.0"
+EDITION = "1.2.2"
 
 LEFT, RIGHT = 110, W - 144
 
@@ -357,7 +357,7 @@ CHAPTERS = [
         ("p", "It is not self-lapping: like the H-6, it applies until it is lapped, from a reducing valve set at 3.1 bar (45 lb)."),
         ("fig", lambda p, cx, cy: valve_figure(p, cx, cy - 30, 85, S6, [196, 150, 106, 62, 18], 1), 310, "FIG. 6.—The S-6 independent brake valve; handle in Running position."),
         ("pos", [
-            ("Release", "Click and hold the lever: the engine's brakes let off while you hold it; what is left stays on. It springs back to Running. In VR, each trigger press lets off some."),
+            ("Release", "Below Running. Hold the handle here and the engine's brakes let off; what is left stays on. It springs back to Running. A handle without notches: click and hold it."),
             ("Running", "The engine's brakes let go here, but only with the H-6 in Running too."),
             ("Lap", "Holds the engine's brakes, even through the train's release and recharge."),
             ("Slow App.", "Applies gradually: lap it at the pressure you want."),

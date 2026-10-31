@@ -69,6 +69,15 @@ namespace RealisticBrakes.AdapterCheck
             var placed = AccessTools.Field(typeof(ItemPlacerOffset), "customRotationOffset");
             Check(placed != null && placed.FieldType == typeof(UnityEngine.Vector3),
                 "an item's placer keeps its turn on the table in a Vector3, which the brake booklet sets to the vehicle catalog's");
+            var prefabName = AccessTools.Field(typeof(InventoryItemSpec), "itemPrefabName");
+            Check(prefabName != null && prefabName.FieldType == typeof(string),
+                "an item's spec keeps the prefab name saves record in a string, which the brake booklet sets to its own");
+            var madeCount = AccessTools.Field(typeof(StartingItemsController), "instantiatedItemCount");
+            var safety = AccessTools.Field(typeof(StartingItemsController), "ITEM_INSTANTIATION_SAFETY_POSITION");
+            var apart = AccessTools.Field(typeof(StartingItemsController), "ITEM_INSTANTIATION_SAFETY_OFFSET");
+            Check(madeCount != null && madeCount.FieldType == typeof(int) && safety != null && safety.IsStatic && safety.FieldType == typeof(UnityEngine.Vector3)
+                    && apart != null && apart.IsStatic && apart.FieldType == typeof(UnityEngine.Vector3),
+                "the game makes saved items above the world, each apart from the last, as the brake booklet's loader copies");
             var notchAngle = AccessTools.Field(typeof(SteppedJoint), "cachedAngle");
             Check(notchAngle != null && notchAngle.FieldType == typeof(float),
                 "a notched lever keeps the angle it last aimed its spring from in a float, which the S-6 handle clears to re-aim it");

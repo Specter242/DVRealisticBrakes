@@ -137,17 +137,18 @@ while they recharge.
   off together. A further reduction applies the engine again; a release
   clears the bail. A setting turns the click off.
   - With **American equipment** a steam engine bails off a little at a
-    time, as the real E-T does: click and hold the independent lever, and
-    the engine's brakes let off for as long as you hold it (in VR, each trigger
-    press lets off some). What's left stays on. After an emergency from the
-    engine's own handle, the brakes come back as soon as you let go, as on
-    the real E-T.
-  - Its independent is the E-T's S-6, which isn't self-lapping: running,
-    lap, slow application, and quick application (sprung back to slow).
-    Slow application builds gradually up to 3.1 bar; lap it where you want
-    it. It lets go in running only with the train brake in running too, and
-    in lap it holds the engine's brakes through the train's release. Click
-    and hold for release.
+    time, as the real E-T does: hold the independent in release, the notch
+    below running, and the engine's brakes let off for as long as you hold
+    it there; it springs back to running. On a handle without notches,
+    click and hold the lever instead (in VR, each trigger press lets off
+    some). What's left stays on. After an emergency from the engine's own
+    handle, the brakes come back as soon as you let go, as on the real E-T.
+  - Its independent is the E-T's S-6, which isn't self-lapping: release,
+    running, lap, slow application, and quick application (release springs
+    back to running, quick application to slow). Slow application builds
+    gradually up to 3.1 bar; lap it where you want it. It lets go in
+    running only with the train brake in running too, and in lap it holds
+    the engine's brakes through the train's release.
 
 ## European or American equipment
 
@@ -170,7 +171,9 @@ holding, and the S-6 independent.
     the brakes come up short; keep doing it and the train runs out of air.
   - An emergency adds each car's emergency reservoir, about a fifth more
     braking, and vents the pipe at every car, so it runs down the train
-    fast. The pipe can't be recharged until about a minute has passed.
+    fast. The pipe can't be recharged until about a minute has passed. The
+    emergency reservoir keeps its air through a release; it gives it only
+    in an emergency or to the bleed rod.
   - Holding the steam engines' handle in release overcharges the cars'
     reservoirs. Back in running, the extra pressure bleeds away over up to
     ten minutes, and the brakes stay off. Brake in that time and the
@@ -205,10 +208,12 @@ automatic empty/load equipment instead.
 *The Air-Brake Pocket-Book*, after the Westinghouse instruction books: how
 the air brake works, each engine's brake valve on European and American
 equipment, the cars' valves, the levers at the car, the independent and
-bailing off, and the settings. In a loaded game, open the mod's settings and
-press **Spawn the brake booklet**; it appears in front of you. Press a line
-on its contents page, or a tab down its edge, to turn to that chapter. It
-isn't saved with the game: spawn it again after loading.
+bailing off, and the settings. It's given once, into your inventory with
+the game's own booklets: on a new game, or the first time a save loads with
+the mod. It's saved with the game and yours to keep, drop, or throw away. To
+get another, open the mod's settings in a loaded game and press **Spawn the
+brake booklet**; it appears in front of you. Press a line on its contents
+page, or a tab down its edge, to turn to that chapter.
 
 ## Settings
 
@@ -239,6 +244,9 @@ isn't saved with the game: spawn it again after loading.
   pumps work.
 - **Valve 394, Self-Lapping Brakes, and other brake mods:** use one brake
   mod at a time. The log names any that replace the same parts.
+- **Custom Car Loader:** its steamers get the steam engines' brake valve,
+  and their tenders brake with the engine. Its cars get the levers where
+  they have a bleed handle.
 - **Multiplayer:** everyone in a session needs this mod. Guests use the
   host's brake settings for the session, and what anyone does to the car
   levers, a held bleed, a bail-off, or a diesel handle's added notches

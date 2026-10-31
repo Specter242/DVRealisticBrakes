@@ -92,7 +92,7 @@ public class EtEquipmentTests
     }
 
     // The S-6's notches on the game's 0-1 handle: running, lap, slow application, quick application.
-    private const double Running = 0, Lap = 1.0 / 3, Slow = 2.0 / 3, Quick = 1;
+    private const double Release = 0, Running = 0.25, Lap = 0.5, Slow = 0.75, Quick = 1;
 
     [Fact]
     public void TheS6GivesItsReducingValvesFortyFivePounds()
@@ -214,26 +214,48 @@ public class EtEquipmentTests
     [Fact]
     public void ALapBeforeChamberDHasCaughtUpBringsThePipeDownToIt()
     {
-        // Lapped straight from release, the equalizing piston lets the pipe at the engine down to chamber D's pressure.
+        // Lapped straight from release, the equalizing piston lets the pipe at the engine down to chamber D's pressure: it
+        // doesn't hold the release's higher pipe. The train's reservoirs, still recharging, take it lower still (the AB has
+        // no accelerated release to hold the pipe up).
         var rig = Train(30);
         rig.Service(1.5);
         rig.Run(30);
         rig.Valve.Position = DriverValvePosition.Fill;
         rig.Run(3);
+        var released = rig.Cars[0].PipeSection.GaugeBar;
         rig.Valve.Position = DriverValvePosition.Lap;
         var er = rig.Valve.EqualizingReservoir.GaugeBar;
+        Assert.True(released > er + 0.2, $"the release raises the pipe at the engine over chamber D ({released:F2} against {er:F2} bar)");
         rig.Run(5);
-        Assert.InRange(rig.Cars[0].PipeSection.GaugeBar, er - 0.15, er + 0.1);
+        Assert.True(rig.Cars[0].PipeSection.GaugeBar <= er + 0.1, $"lapped, the pipe comes down to chamber D ({rig.Cars[0].PipeSection.GaugeBar:F2} against {er:F2} bar)");
     }
 
     [Fact]
     public void TheS6PositionsAreBandsOfTheHandle()
     {
-        Assert.Equal(IndependentPosition.Running, LocomotiveBrake.PositionOf(0));
-        Assert.Equal(IndependentPosition.Running, LocomotiveBrake.PositionOf(0.1));
-        Assert.Equal(IndependentPosition.Lap, LocomotiveBrake.PositionOf(1.0 / 3));
-        Assert.Equal(IndependentPosition.SlowApplication, LocomotiveBrake.PositionOf(2.0 / 3));
-        Assert.Equal(IndependentPosition.QuickApplication, LocomotiveBrake.PositionOf(1));
+        // Five notches: release, running, lap, slow, quick. Release counts as running unless a hand holds it there.
+        Assert.Equal(IndependentPosition.Running, LocomotiveBrake.PositionOf(Release));
+        Assert.Equal(IndependentPosition.Running, LocomotiveBrake.PositionOf(Running));
+        Assert.Equal(IndependentPosition.Running, LocomotiveBrake.PositionOf(0.3));
+        Assert.Equal(IndependentPosition.Lap, LocomotiveBrake.PositionOf(Lap));
+        Assert.Equal(IndependentPosition.SlowApplication, LocomotiveBrake.PositionOf(Slow));
+        Assert.Equal(IndependentPosition.QuickApplication, LocomotiveBrake.PositionOf(Quick));
+        Assert.True(LocomotiveBrake.InRelease(Release));
+        Assert.True(LocomotiveBrake.InRelease(0.1));
+        Assert.False(LocomotiveBrake.InRelease(Running));
+    }
+
+    [Fact]
+    public void TheIndependentCountsAsHeldInReleaseOnlyWhileABailIsHeld()
+    {
+        var rig = Train();
+        rig.Service(1.5);
+        rig.Run(30);
+        Assert.False(rig.Engine.HeldInRelease);
+        rig.Engine.BailOffBy(0.1 * Air.Bar);
+        Assert.True(rig.Engine.HeldInRelease);
+        rig.Run(LocomotiveBrake.BailHold + 0.1);
+        Assert.False(rig.Engine.HeldInRelease);
     }
 
     [Fact]

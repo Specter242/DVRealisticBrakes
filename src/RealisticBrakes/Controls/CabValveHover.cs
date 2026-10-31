@@ -13,10 +13,19 @@ namespace RealisticBrakes.Controls
         {
             Add(cab, InteriorControlsManager.ControlType.TrainBrake, car,
                 (air, engine) => CabValveText.TrainBrake(engine, air.System.selfLappingController));
+            // The S-6 handle is fitted after this, so it's looked for as the text is drawn.
+            var independent = cab.TryGetControl(InteriorControlsManager.ControlType.IndBrake, out var lever) ? lever.controlImplBase : null;
             Add(cab, InteriorControlsManager.ControlType.IndBrake, car,
-                (air, engine) => air.System.hasIndependentBrake ? CabValveText.Independent(engine, Main.Settings.ClickToBailOff) : null);
+                (air, engine) => air.System.hasIndependentBrake
+                    ? CabValveText.Independent(engine, Main.Settings.ClickToBailOff, HasReleaseNotch(independent)) : null);
             Add(cab, InteriorControlsManager.ControlType.TrainBrakeCutout, car,
                 (air, engine) => CabValveText.Cutout(engine.DriverValve));
+        }
+
+        private static bool HasReleaseNotch(ControlImplBase lever)
+        {
+            var handle = lever != null ? lever.GetComponent<IndependentHandle>() : null;
+            return handle != null && handle.HasReleaseNotch;
         }
 
         private static void Add(InteriorControlsManager cab, InteriorControlsManager.ControlType type, TrainCar car, Func<CarAir, LocomotiveBrake, string> describe)

@@ -8,19 +8,23 @@ namespace RealisticBrakes.Controls
 {
  internal sealed class IndependentHandle : MonoBehaviour
     {
-        /// <summary>The S-6's positions as notches: running, lap, slow application, quick application.</summary>
-        public const int Notches = 4;
+        /// <summary>The S-6's positions as notches: release, running, lap, slow application, quick application.</summary>
+        public const int Notches = 5;
 
         // Slow application on the game's scale, where quick application springs back to.
-        private const float SlowApplication = 2f / 3f;
+        private const float SlowApplication = 0.75f;
 
         private ControlImplBase control;
         private bool sprungByJoint;
         private SteppedJoint joint;
+        private IndependentBailClick bail;
+
+        /// <summary>Whether this handle has the release notch: a stepped lever, given the S-6's five notches.</summary>
+        public bool HasReleaseNotch => sprungByJoint;
 
         // The game's notched lever re-aims its spring only when its angle changes (SteppedJoint.Update, against this). A key,
-        // the scroll wheel, or the mouse holding the handle in quick application turns the spring off; let go once the
-        // handle had settled there, the spring came back on still aimed at quick application, and the handle stayed (Torun,
+        // the scroll wheel, or the mouse holding the handle in quick application (or release) turns the spring off; let go
+        // once the handle had settled there, the spring came back on still aimed there, and the handle stayed (Torun,
         // 2026-10-30: "the spring kind of breaks"; Lonoxmont's handle "jam[med] into fast apply").
         private static readonly AccessTools.FieldRef<SteppedJoint, float> cachedAngle = AccessTools.FieldRefAccess<SteppedJoint, float>("cachedAngle");
 
@@ -48,10 +52,10 @@ namespace RealisticBrakes.Controls
             if (spec != null && spec.useSteppedJoint && spec.steppedValueUpdate && spec.useLimits && !built)
             {
                 spec.notches = Notches;
-                // Counted from running, which the joint finds at either end (SteppedJoint.AngleForNotch): let go past slow
-                // application, the spring brings the handle back to it.
+                // Counted from release, which the joint finds at either end (SteppedJoint.AngleForNotch): let go in release
+                // or quick application, the spring brings the handle back to running or slow application.
                 spec.useInnerLimitSpring = true;
-                spec.innerLimitMinNotch = 0;
+                spec.innerLimitMinNotch = 1;
                 spec.innerLimitMaxNotch = Notches - 2;
                 handle.sprungByJoint = true;
             }
@@ -71,13 +75,28 @@ namespace RealisticBrakes.Controls
                 control.Ungrabbed -= OnUngrabbed;
         }
 
-        // Let go in quick application, a stepped handle's spring is made to re-aim, at slow application, the next frame.
+        // Held in release, the handle bails off. Let go in release or quick application, a stepped handle's spring is made to
+        // re-aim, at running or slow application, the next frame.
         private void LateUpdate()
         {
-            if (!sprungByJoint || control == null || (joint == null && (joint = GetComponent<SteppedJoint>()) == null))
+            if (control == null)
                 return;
-            if (joint.isSpringActive && !control.IsGrabbed() && LocomotiveBrake.PositionOf(control.Value) == IndependentPosition.QuickApplication)
+            if (!sprungByJoint || (joint == null && (joint = GetComponent<SteppedJoint>()) == null))
+                return;
+            var value = control.Value;
+            // Held by a hand (grabbed), or by a key or the scroll wheel (the spring off while they turn it).
+            var held = control.IsGrabbed() || !joint.isSpringActive;
+            if (!held && (LocomotiveBrake.InRelease(value) || LocomotiveBrake.PositionOf(value) == IndependentPosition.QuickApplication))
                 cachedAngle(joint) = float.NaN;
+            HoldRelease(held && LocomotiveBrake.InRelease(value));
+        }
+
+        private void HoldRelease(bool held)
+        {
+            if (bail == null)
+                bail = GetComponent<IndependentBailClick>();
+            if (bail != null)
+                bail.HoldRelease(held);
         }
 
         // Let go in quick application, a smooth handle goes back to slow application, as the S-6's return spring takes it.
