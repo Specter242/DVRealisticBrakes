@@ -62,6 +62,11 @@ while they recharge.
     springs back to release when you let go. Holding the brake-release key
     or turning the wheel on works too. American equipment has no filling
     stroke, as the real 26-L valve has none.
+  - A stroke leaves the train **overcharged** a little, up to 0.4 bar,
+    which running lets down over about four minutes. The cars keep it: a
+    cut left standing stays overcharged, and given an engine at the usual
+    5 bar, its brakes come on, as on the real thing. Give it a filling
+    stroke and let it come down, or bleed the cars.
   - **Past full service** is **emergency**. It stays until you move it
     back.
 
@@ -97,8 +102,8 @@ while they recharge.
 - **Looking at the brake handles** (not in VR) shows where they stand by
   the crosshair: the train brake's position (with the equalizing
   reservoir or the reduction), the independent's application and the
-  train brake's on the engine, and the brake valve's cut-out. A setting
-  turns this off.
+  train brake's on the engine, and the brake valve's cut-out; on a car,
+  its brake levers. A setting turns all of it off.
 - **Long trains:** the rear brakes later and slower than the front. A
   release reaches the rear last, and the cars' reservoirs take minutes to
   recharge.
@@ -135,7 +140,8 @@ while they recharge.
   brake lever (in VR, hold it and press the trigger). The engine's own
   brakes let go, and the train's stay on. Engines joined by MU cable bail
   off together. A further reduction applies the engine again; a release
-  clears the bail. A setting turns the click off.
+  clears the bail. A setting turns the click off. A bail-off key, set in
+  the mod's settings, does the same from wherever you stand in the cab.
   - With **American equipment** a steam engine bails off a little at a
     time, as the real E-T does: hold the independent in release, the notch
     below running, and the engine's brakes let off for as long as you hold
@@ -148,7 +154,8 @@ while they recharge.
     back to running, quick application to slow). Slow application builds
     gradually up to 3.1 bar; lap it where you want it. It lets go in
     running only with the train brake in running too, and in lap it holds
-    the engine's brakes through the train's release.
+    the engine's brakes through the train's release. A moment in running
+    and back to lap lets off only part.
 
 ## European or American equipment
 
@@ -231,6 +238,8 @@ page, or a tab down its edge, to turn to that chapter.
 - **Equalizing reservoir hand** on the steam engines' main reservoir
   gauge: on by default; it takes effect as a cab loads.
 - **Click to bail off:** on by default.
+- **Bail-off key:** unbound until you set it. It bails off the engine
+  you're on, as the click does, even with the click turned off.
 - **Brake controls' text** by the crosshair: on by default.
 - **Show each car's brake pressures** (off by default): an overlay for the train you're on:
   pipe, control (or, on American cars, emergency) reservoir, auxiliary
@@ -244,6 +253,9 @@ page, or a tab down its edge, to turn to that chapter.
   pumps work.
 - **Valve 394, Self-Lapping Brakes, and other brake mods:** use one brake
   mod at a time. The log names any that replace the same parts.
+- **The M62:** it brakes its train with its own 394 valve, so a train with
+  an M62 in it keeps the M62's brake and the game's; your other trains
+  keep this mod's.
 - **Custom Car Loader:** its steamers get the steam engines' brake valve,
   and their tenders brake with the engine. Its cars get the levers where
   they have a bleed handle.

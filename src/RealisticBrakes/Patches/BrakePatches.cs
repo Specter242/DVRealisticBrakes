@@ -30,7 +30,7 @@ namespace RealisticBrakes.Patches
             Main.ReportOtherBrakeModsOnce();
             try
             {
-                if (BrakeSets.AiDriven(__instance))
+                if (BrakeSets.AiDriven(__instance) || BrakeSets.RunByM62(__instance))
                 {
                     BrakeSets.LeaveToStock(__instance);
                     return;

@@ -74,6 +74,28 @@ namespace RealisticBrakes.Sim
             return false;
         }
 
+        // The M62's own brake (helmutgross's M62-130, Nexus mod 1692; its M62Logic.M62_394_Behavior on each M62), looked up by
+        // name once.
+        private static Type m62Brake;
+        private static bool m62BrakeLooked;
+
+ public static bool RunByM62(Brakeset set)
+        {
+            if (!m62BrakeLooked)
+            {
+                m62BrakeLooked = true;
+                m62Brake = AccessTools.TypeByName("M62Logic.M62_394_Behavior");
+                if (m62Brake != null)
+                    Main.Mod?.Logger.Log("The M62 is here: trains with an M62 in them keep its own brake");
+            }
+            if (m62Brake == null)
+                return false;
+            foreach (var system in set.cars)
+                if (system != null && system.hasCompressor && system.GetComponent(m62Brake) is Behaviour brake && brake.isActiveAndEnabled)
+                    return true;
+            return false;
+        }
+
         /// <summary>
         /// Leaves <paramref name="set"/> to the game's own brake: its cars'
         /// air is forgotten and their force given back, so the stock brake

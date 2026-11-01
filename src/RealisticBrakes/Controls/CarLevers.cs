@@ -395,7 +395,8 @@ namespace RealisticBrakes.Controls
             lever.Kind = kind;
             lever.Car = car;
             lever.Notches = notches;
-            control.gameObject.AddComponent<HoverText>().Source = lever.Describe;
+            // Under the same setting as the cab's (cj187, 2026-10-31: with the text off, the cut-out and G/P text still showed).
+            control.gameObject.AddComponent<HoverText>().Source = () => Main.Settings.ShowValveText ? lever.Describe() : null;
             return holder;
         }
 

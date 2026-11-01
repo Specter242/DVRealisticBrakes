@@ -52,7 +52,10 @@ namespace RealisticBrakes
         [Draw("Click the independent brake lever to bail off (in VR, hold it and press the trigger): the engine's own brakes release from a train brake application, the train's stay on")]
         public bool ClickToBailOff = true;
 
-        [Draw("Looking at an engine's train brake, independent brake, or brake valve cut-out shows where it stands by the crosshair (not in VR)")]
+        [Draw("Bail-off key: bails off the engine you're on, as the click does (unbound until you set it)")]
+        public KeyBinding BailOffKey = new KeyBinding();
+
+        [Draw("Looking at an engine's train brake, independent brake, or brake valve cut-out, or a car's brake levers, shows where it stands by the crosshair (not in VR)")]
         public bool ShowValveText = true;
 
         [Draw("Show each car's brake pressures for the train you're on")]

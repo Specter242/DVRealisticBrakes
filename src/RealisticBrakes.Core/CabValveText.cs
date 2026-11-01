@@ -26,7 +26,8 @@ namespace RealisticBrakes.Core
                 case DriverValvePosition.Apply:
                     return $"Train brake: service (equalizing reservoir coming down, {er:F1} bar; lap to hold it)";
                 case DriverValvePosition.Service:
-                    var reduction = valve.Spec.Running + Air.Atmosphere - valve.EqualizingTarget;
+                    // Made from running and any overcharge the valve carries through the application.
+                    var reduction = valve.Spec.Running + valve.OverchargeLeft + Air.Atmosphere - valve.EqualizingTarget;
                     return reduction >= valve.Spec.FullService - 1
                         ? $"Train brake: full service ({Bar(reduction):0.0#} bar reduction)"
                         : $"Train brake: service ({Bar(reduction):0.0#} bar reduction)";

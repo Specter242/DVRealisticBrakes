@@ -145,6 +145,10 @@ namespace RealisticBrakes
 
         private static bool reported;
 
+        // The M62's mod: its prefix stands the game's train brake aside on the M62 alone, and the trains it's in are left to it
+        // (BrakeSets.RunByM62), so it doesn't fight the model.
+        private const string M62Id = "M62-130";
+
         /// <summary>
         /// Names, once, at the first brake tick (every mod loaded by then),
         /// other mods that replace the same stock brake methods (Valve 394,
@@ -167,7 +171,7 @@ namespace RealisticBrakes
                 if (info == null)
                     continue;
                 foreach (var patch in info.Prefixes.Concat(info.Transpilers))
-                    if (patch.owner != modEntry.Info.Id)
+                    if (patch.owner != modEntry.Info.Id && patch.owner != M62Id)
                         others.Add(patch.owner);
             }
             if (others.Count > 0)

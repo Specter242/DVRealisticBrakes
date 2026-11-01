@@ -102,7 +102,7 @@ namespace RealisticBrakes.Sim
                 // American manual-lap engines (the steam engines and the DM3) have the E-T equipment: the H-6 automatic and the
                 // No. 6 distributing valve. The self-lapping diesels have the 26-L.
                 var et = american && system.hasTrainBrake && !system.selfLappingController;
-                var spec = et ? LocomotiveBrakeSpec.EtSteam() : new LocomotiveBrakeSpec();
+                var spec = et ? LocomotiveBrakeSpec.EtSteam() : american ? LocomotiveBrakeSpec.American() : new LocomotiveBrakeSpec();
                 if (system.mainResVolume > 0)
                     spec.MainReservoirVolume = system.mainResVolume / 1000.0;
                 var valveSpec = et ? DriverBrakeValveSpec.H6() : american ? DriverBrakeValveSpec.American() : DriverBrakeValveSpec.Uic();

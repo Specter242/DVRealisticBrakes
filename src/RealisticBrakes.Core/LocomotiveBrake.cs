@@ -72,13 +72,7 @@ namespace RealisticBrakes.Core
 
  public bool ManualLapIndependent { get; set; }
 
-        /// <summary>
-        /// The S-6's slow application port from the reducing valve: "a very
-        /// small port ... permits reducing valve pressure to flow quite
-        /// gradually to the application cylinder ... permitting very fine
-        /// graduating" (Wood p. 137). Inferred: the full 45 lb in about 20 s.
-        /// </summary>
-        public Orifice SlowApplication { get; set; } = new Orifice(0.52);
+ public Orifice SlowApplication { get; set; } = new Orifice(0.77);
 
         /// <summary>
         /// The S-6's quick application port: "a larger port ... a sudden and
@@ -89,10 +83,12 @@ namespace RealisticBrakes.Core
         /// <summary>
         /// The way out for the application chamber in running: the
         /// distributing valve's release pipe through the S-6 and the H-6's
-        /// running position to the air (ICS p. 146). Inferred: the engine off
-        /// as soon as the automatic's release in running lets it go.
+        /// running position to the air (ICS p. 146). The held automatic goes
+        /// out the same way (<see cref="LocomotiveBrake.HeldAutomatic"/>).
+        /// Inferred: the full 45 lb out in about 4 s, slower than the
+        /// cylinders can follow, so lap catches them where they stand.
         /// </summary>
-        public Orifice IndependentRelease { get; set; } = new Orifice(3.0);
+        public Orifice IndependentRelease { get; set; } = new Orifice(2.4);
 
         /// <summary>The application chamber the S-6 fills, m³ (inferred).</summary>
         public double ApplicationChamberVolume { get; set; } = 0.002;
@@ -116,6 +112,18 @@ namespace RealisticBrakes.Core
         public double GovernorDifferential { get; set; } = 0.2 * Air.Bar;
 
         /// <summary>
+        /// An American diesel's 26-L: the distributor that stands for its
+        /// automatic brake charges only to the working pressure, as American
+        /// valves have no low-pressure overcharge.
+        /// </summary>
+        public static LocomotiveBrakeSpec American()
+        {
+            var spec = new LocomotiveBrakeSpec();
+            spec.Distributor.ControlReservoirLimit = UicDistributorSpec.RunningLimit;
+            return spec;
+        }
+
+        /// <summary>
         /// An American steam engine's E-T equipment (Wood; ICS): the No. 6
         /// distributing valve held through release and holding, its emergency
         /// at 65 and 68 lb, the S-6 independent from a 45 lb reducing valve
@@ -135,8 +143,11 @@ namespace RealisticBrakes.Core
                 IndependentMaximum = 3.1 * Air.Bar,
                 DuplexGovernor = true,
                 DeadEngineFeed = new Orifice(1.6),
+                CylinderSupply = new Orifice(8.0),
+                CylinderExhaust = new Orifice(12.0),
             };
             spec.Distributor.QuickService = new Orifice(0);
+            spec.Distributor.ControlReservoirLimit = UicDistributorSpec.RunningLimit;
             return spec;
         }
     }
@@ -209,18 +220,12 @@ namespace RealisticBrakes.Core
         /// the automatic brake valve is also in running position" (Wood p. 136;
         /// ICS p. 146).
         /// </summary>
-        public bool ReleasePipeOpen => LetsAutomaticGoAtValve && !AutomaticApplied;
+        public bool ReleasePipeOpen => LetsAutomaticGoAtValve && !Distributor.Applied;
 
         /// <summary>The automatic application bailed off, gauge Pa.</summary>
         public double BailedOff { get; set; }
 
-        /// <summary>
-        /// The automatic application an E-T engine holds, gauge Pa
-        /// (<see cref="LocomotiveBrakeSpec.HoldsAutomaticBrake"/>): the
-        /// highest its distributor has asked for, until the automatic handle
-        /// in running lets it go.
-        /// </summary>
-        public double HeldAutomatic { get; set; }
+ public double HeldAutomatic { get; set; }
 
         // Whether the automatic handle lets an E-T engine's brake go: in running, or with no valve of its own working (a trailing or dead engine).
         private bool LetsAutomaticGoAtValve => DriverValve == null || !DriverValve.CutIn || DriverValve.Position == DriverValvePosition.Running;
@@ -387,7 +392,7 @@ namespace RealisticBrakes.Core
                 if (Distributor.Applied)
                     HeldAutomatic = Math.Max(HeldAutomatic, pilot);
                 else if (LetsAutomaticGo)
-                    HeldAutomatic = 0;
+                    HeldAutomatic = VentReleasePipe(HeldAutomatic, dt);
                 var own = DriverValve != null && DriverValve.CutIn && DriverValve.Position == DriverValvePosition.Emergency;
                 if (Distributor.Applied && Distributor.ControlReservoir.Pressure - pipe.Pressure > spec.EmergencyReduction)
                     HeldAutomatic = Math.Max(HeldAutomatic, own ? spec.OwnEmergencyCylinder : spec.EmergencyCylinder);
@@ -418,6 +423,23 @@ namespace RealisticBrakes.Core
                 ExhaustFlow = spec.CylinderExhaust.Vent(Cylinder, dt, target) / dt;
             MainReservoirDraw = (before - MainReservoir.Mass) / dt;
         }
+
+        // The application chamber standing in for the held automatic as it goes out through the release pipe.
+        private Chamber releasing;
+
+        // Lets the held automatic, gauge Pa, out through the release pipe for dt s; returns what's left, nothing once it's
+        // all but gone (the flow dies away near the atmosphere).
+        private double VentReleasePipe(double held, double dt)
+        {
+            releasing = releasing ?? new Chamber(spec.ApplicationChamberVolume);
+            releasing.Pressure = Air.Atmosphere + held;
+            spec.IndependentRelease.Vent(releasing, dt);
+            var left = Math.Max(0, releasing.Pressure - Air.Atmosphere);
+            return left < ReleasedBelow ? 0 : left;
+        }
+
+        // A held automatic under this, gauge Pa, counts as released.
+        private const double ReleasedBelow = 0.005 * Air.Bar;
 
         // The S-6 for dt s: reducing-valve air in through the slow or quick port, up to the valve's 45 lb; held in lap; let out in
         // running through the release pipe when it's open. Returns the independent's application, gauge Pa.

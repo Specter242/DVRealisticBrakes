@@ -56,18 +56,10 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double ControlFollowSeconds { get; set; } = 15;
 
-        /// <summary>
-        /// The most the control reservoir charges to, gauge Pa: the pipe's
-        /// 5 bar working pressure. A distributor's overload limiter keeps a
-        /// pipe held over it (a filling stroke, a release held long) from
-        /// overcharging its reference, which "could, in subsequent braking,
-        /// lead to over-application of the brakes and to subsequent
-        /// difficulties in releasing" (Sab Wabco, EP0797521). Without it, a
-        /// stroke held for 20 s, or a brake made while a stroke's overcharge
-        /// was still coming down, left cars and engines dragging after the
-        /// release (a player's report, 2026-10-28).
-        /// </summary>
-        public double ControlReservoirLimit { get; set; } = 5.0 * Air.Bar;
+ public double ControlReservoirLimit { get; set; } = 5.4 * Air.Bar;
+
+        /// <summary>The control reservoir's limit at the working pressure alone, gauge Pa, for American equipment's distributors.</summary>
+        public const double RunningLimit = 5.0 * Air.Bar;
 
         /// <summary>The pipe must come back within this of the control reservoir for the valve to release fully, Pa (inferred).</summary>
         public double ReleaseThreshold { get; set; } = 0.05 * Air.Bar;
@@ -97,7 +89,7 @@ namespace RealisticBrakes.Core
         /// emergency about a sixth higher, 4.4 bar: as high as its auxiliary
         /// reservoir, levelled with the cylinder, reaches.
         /// </summary>
-        public static UicDistributorSpec AmericanCoach() => new UicDistributorSpec { EmergencyCylinder = 4.4 * Air.Bar };
+        public static UicDistributorSpec AmericanCoach() => new UicDistributorSpec { EmergencyCylinder = 4.4 * Air.Bar, ControlReservoirLimit = RunningLimit };
 
         /// <summary>
         /// The first stage's cylinder pressure, gauge Pa: the brake comes on
@@ -166,9 +158,9 @@ namespace RealisticBrakes.Core
     /// reservoir stays full, the reservoirs never feed the pipe, and
     /// repeated applications can't use the brake up. Released, the control
     /// reservoir follows the pipe through a fine choke, so a slow leak
-    /// doesn't apply the brake. An overcharged pipe (a filling stroke)
-    /// overcharges it too, and brakes then drag unless the overcharge is
-    /// let down slowly. Applying, the first stage vents a little pipe air
+    /// doesn't apply the brake. A low-pressure overcharge (a filling stroke)
+    /// overcharges it too, up to its limiter, and brakes then drag unless
+    /// the overcharge is let down slowly. Applying, the first stage vents a little pipe air
     /// into the quick-service chamber, which carries the drop on to the next
     /// car.
     /// </summary>

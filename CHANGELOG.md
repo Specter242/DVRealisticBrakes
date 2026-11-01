@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.3 (2026-11-01)
+
+- The S-6 independent (American equipment): lap holds the engine's brakes
+  where they stand, applying or releasing, and a moment in running and
+  back to lap lets off only part. Slow application is about twice as
+  fast, about 10 seconds to the full 45 lb. The equalizing reservoir
+  charges with the brake pipe.
+- European equipment: a filling stroke leaves the train overcharged a
+  little, up to 0.4 bar, which running lets down over about four minutes.
+  The cars keep it: a cut left standing stays overcharged, and given an
+  engine at the usual 5 bar, its brakes come on, as on the real thing.
+  Give it a filling stroke and let it come down, or bleed the cars.
+- A bail-off key, set in the mod's settings, bails off the engine you're
+  on, as the click on the independent does.
+- The brake controls' text setting hides the car levers' text too.
+- A train with an M62 in it keeps the M62's own brake, which runs its
+  whole train, and the log no longer warns that the two fight.
+- The brake booklet covers the bail-off key and the overcharge.
+
 ## 1.2.2 (2026-10-31)
 
 - Tenders brake with their engine: the independent, the train brake, and

@@ -31,6 +31,20 @@ public class CabValveTextTests
     }
 
     [Fact]
+    public void AReductionMadeDuringAnOverchargeReadsAsItself()
+    {
+        // The European valve carries its overcharge through the application: the reduction reads from there, not from running.
+        var rig = new Rig(5);
+        rig.Valve.Position = DriverValvePosition.Fill;
+        rig.Run(3);
+        rig.Valve.Position = DriverValvePosition.Running;
+        rig.Run(5);
+        Assert.True(rig.Valve.OverchargeLeft > 0.3 * Air.Bar);
+        rig.Service(0.75);
+        Assert.Equal("Train brake: service (0.75 bar reduction)", CabValveText.TrainBrake(rig.Engine, selfLapping: true));
+    }
+
+    [Fact]
     public void TheSelfLappingHandleGivesItsReduction()
     {
         var rig = new Rig(5, american: true, driver: DriverBrakeValveSpec.American());

@@ -109,11 +109,16 @@ public class EtEquipmentTests
     [Fact]
     public void SlowApplicationBuildsQuiteGraduallyAndQuickApplicationAtOnce()
     {
-        // "Quite gradually ... very fine graduating" and "a sudden and heavy application" (Wood pp. 137-138).
         var slow = Train();
         slow.Engine.Independent = Slow;
         var t = slow.RunUntil(() => EngineBar(slow) >= 3.0, 60);
-        Assert.InRange(t, 15, 25);
+        Assert.InRange(t, 8, 12);
+        var bite = Train();
+        bite.Engine.Independent = Slow;
+        bite.Run(1);
+        bite.Engine.Independent = Lap;
+        bite.Run(5);
+        Assert.InRange(EngineBar(bite), 0.25, 0.4);
         var quick = Train();
         quick.Engine.Independent = Quick;
         Assert.InRange(quick.RunUntil(() => EngineBar(quick) >= 3.0, 60), 1, 4);
@@ -122,15 +127,58 @@ public class EtEquipmentTests
     [Fact]
     public void LapHoldsWhatTheApplicationGave()
     {
+        // Lapped, the engine stays where it stood that instant (Lonoxmont, 2026-10-31: lap should "bottle whatever it has in
+        // it at that instant, whether that's releasing or applying"), in slow application and in quick.
+        foreach (var (position, seconds) in new[] { (Slow, 4.0), (Quick, 1.0) })
+        {
+            var rig = Train();
+            rig.Engine.Independent = position;
+            rig.Run(seconds);
+            rig.Engine.Independent = Lap;
+            var held = EngineBar(rig);
+            Assert.InRange(held, 0.8, 2.2);
+            rig.Run(60);
+            Assert.InRange(EngineBar(rig), held - 0.05, held + 0.05);
+        }
+    }
+
+    [Fact]
+    public void LapCatchesARunningReleaseWhereItStands()
+    {
+        // "Independent release may only mean a partial discharge of the application cylinder pressure with a return to lap
+        // position of the independent brake valve, and a partial release of the locomotive brake" (Wood). The cylinders
+        // stopped up to 0.7 bar under where they stood at the lap.
         var rig = Train();
-        rig.Engine.Independent = Slow;
-        rig.Run(8);
+        rig.Engine.Independent = Quick;
+        rig.Run(10);
+        rig.Engine.Independent = Running;
+        rig.Run(1);
         rig.Engine.Independent = Lap;
-        rig.Run(2);
         var held = EngineBar(rig);
-        Assert.InRange(held, 0.8, 2.2);
+        Assert.InRange(held, 1.0, 2.6);
+        rig.Run(30);
+        Assert.InRange(EngineBar(rig), held - 0.05, held + 0.05);
+    }
+
+    [Fact]
+    public void ABlipToRunningLetsOutPartOfTheHeldApplication()
+    {
+        var rig = Train();
+        rig.Service(1.0);
+        rig.Run(30);
+        rig.Engine.Independent = Lap;
+        rig.Valve.Position = DriverValvePosition.Running;
         rig.Run(60);
-        Assert.InRange(EngineBar(rig), held - 0.03, held + 0.03);
+        var applied = EngineBar(rig);
+        rig.Engine.Independent = Running;
+        rig.Run(0.5);
+        rig.Engine.Independent = Lap;
+        var held = EngineBar(rig);
+        Assert.InRange(held, applied - 1.0, applied - 0.2);
+        rig.Run(30);
+        Assert.InRange(EngineBar(rig), held - 0.05, held + 0.05);
+        rig.Engine.Independent = Running;
+        Assert.InRange(rig.RunUntil(() => EngineBar(rig) < 0.1, 30), 1, 6);
     }
 
     [Fact]
@@ -209,6 +257,21 @@ public class EtEquipmentTests
         er = rig.Valve.EqualizingReservoir.GaugeBar;
         Assert.InRange(er, pipe - 0.05, pipe + 0.05);
         Assert.InRange(er, 4.9, 5.1);
+    }
+
+    [Fact]
+    public void ChamberDChargesWithThePipeFromEmpty()
+    {
+        // Charging an empty train in running, chamber D comes up with the pipe at the engine, "uniformly" (ICS p. 138): it
+        // trailed it by about a bar for the first seconds (Lonoxmont, 2026-10-31).
+        var rig = new Rig(40, charged: false, american: true, engine: LocomotiveBrakeSpec.EtSteam(), driver: DriverBrakeValveSpec.H6());
+        for (var i = 0; i < 6; i++)
+        {
+            rig.Run(5);
+            var pipe = rig.Cars[0].PipeSection.GaugeBar;
+            var er = rig.Valve.EqualizingReservoir.GaugeBar;
+            Assert.True(Math.Abs(er - pipe) < 0.1, $"after {5 * (i + 1)} s chamber D stood at {er:F2} bar, the pipe at the engine {pipe:F2}");
+        }
     }
 
     [Fact]

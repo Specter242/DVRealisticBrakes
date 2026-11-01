@@ -164,11 +164,30 @@ public class TrainTests
         rig.Run(30);
         rig.Service(0.5);
         rig.Run(40);
-        Assert.InRange(rig.Rear.CylinderGauge / Air.Bar, 1.1, 1.4);
+        // The reduction is made from the overcharge the brake valve carries through it: the front, which has the overcharge,
+        // takes about its share; the rear, which the overcharge hadn't reached, less.
+        Assert.InRange(rig.Front.CylinderGauge / Air.Bar, 1.0, 1.4);
+        Assert.InRange(rig.Rear.CylinderGauge / Air.Bar, 0.4, 1.4);
         rig.Valve.Position = DriverValvePosition.Running;
         rig.Run(180);
         Assert.InRange(rig.Engine.Cylinder.GaugeBar, 0, 0.05);
         Assert.All(rig.Cars.Skip(1), c => Assert.InRange(c.CylinderGauge / Air.Bar, 0, 0.05));
+    }
+
+    [Fact]
+    public void AnOverchargedTrainDroppedAtOnceToRunningApplies()
+    {
+        // cj187 (2026-10-31): a train left overcharged, given an engine whose valve stands at running, should feel the drop.
+        var rig = new Rig(10);
+        rig.Valve.Position = DriverValvePosition.Fill;
+        rig.Run(5);
+        rig.Valve.Position = DriverValvePosition.Running;
+        rig.Run(60);
+        Assert.All(rig.Cars.Skip(1), c => Assert.True(c.Distributor!.ControlReservoir.GaugeBar > 5.25, $"a control reservoir stood at {c.Distributor.ControlReservoir.GaugeBar:F2} bar"));
+        // A fresh engine's valve: the equalizing reservoir at running, no overcharge to let down.
+        rig.Valve.ChargeTo(Air.FromGaugeBar(5));
+        rig.Run(30);
+        Assert.All(rig.Cars.Skip(1), c => Assert.InRange(c.CylinderGauge / Air.Bar, 0.5, 1.4));
     }
 }
 

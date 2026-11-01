@@ -110,8 +110,7 @@ namespace RealisticBrakes.Core
 
  public bool EqualizingFollowsPipe { get; set; }
 
-        /// <summary>Cavity k's way between the pipe and chamber D in running and holding (inferred).</summary>
-        public Orifice EqualizingPort { get; set; } = new Orifice(3.0);
+ public Orifice EqualizingPort { get; set; } = new Orifice(6.0);
 
         /// <summary>The equalizing reservoir's service exhaust, which sets the service rate (inferred: 1.5 bar in about 5 s).</summary>
         public Orifice EqualizingExhaust { get; set; } = new Orifice(1.4);
@@ -232,7 +231,7 @@ namespace RealisticBrakes.Core
                     case DriverValvePosition.Fill:
                         return running + Math.Max(spec.Overcharge, OverchargeLeft);
                     case DriverValvePosition.Service:
-                        return running - Math.Max(spec.MinimumReduction, Math.Min(spec.FullService, ServiceReduction));
+                        return running + OverchargeLeft - Math.Max(spec.MinimumReduction, Math.Min(spec.FullService, ServiceReduction));
                     case DriverValvePosition.Emergency:
                     case DriverValvePosition.Apply:
                         return Air.Atmosphere;
@@ -293,7 +292,8 @@ namespace RealisticBrakes.Core
                     OverchargeLeft = Math.Max(0, Math.Min(spec.FillLimit, er.Pressure - running));
                     break;
                 default:
-                    OverchargeLeft = 0;
+                    if (spec.LetsDownRelease)
+                        OverchargeLeft = 0;
                     break;
             }
 

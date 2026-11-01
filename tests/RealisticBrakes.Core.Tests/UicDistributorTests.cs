@@ -125,15 +125,29 @@ public class UicDistributorTests
     }
 
     [Fact]
-    public void TheOverloadLimiterKeepsAnOverchargeOutOfTheControlReservoir()
+    public void TheOverloadLimiterKeepsAHeldStrokeOutOfTheControlReservoir()
     {
         var (valve, pipe) = Charged();
-        // A long filling stroke: the control reservoir stops at the working pressure (EP0797521's overload limiter).
+        // A long filling stroke: the control reservoir stops at the low-pressure overcharge (EP0797521's overload limiter).
         Hold(valve, pipe, 6.0, () => false, 120);
-        Assert.InRange(valve.ControlReservoir.GaugeBar, 4.99, 5.0);
-        // So the pipe dropped back at once leaves the brake off.
-        Hold(valve, pipe, 5.0, () => false, 10);
-        Assert.False(valve.Applied, "an overcharge dropped at once applied the brake");
+        Assert.InRange(valve.ControlReservoir.GaugeBar, 5.39, 5.4);
+        // So the pipe brought back down to it at once leaves the brake off.
+        Hold(valve, pipe, 5.4, () => false, 10);
+        Assert.False(valve.Applied, "a held stroke's pressure let down to the low overcharge applied the brake");
+    }
+
+    [Fact]
+    public void TheLowOverchargeReachesTheControlReservoirAndADropAtOnceApplies()
+    {
+        // cj187 (2026-10-31): a train charged to 5.5 bar and given a fresh engine's 5.0 went there "instantly ... with no
+        // effect on the cylinders". On real distributors the low-pressure overcharge reaches the control reservoir, and a
+        // drop at once applies the brake; the brake valve lets it down slowly so that it doesn't.
+        var (valve, pipe) = Charged();
+        Hold(valve, pipe, 5.4, () => false, 120);
+        Assert.InRange(valve.ControlReservoir.GaugeBar, 5.39, 5.4);
+        Hold(valve, pipe, 5.0, () => false, 30);
+        Assert.True(valve.Applied, "the overcharge dropped at once left the brake off");
+        Assert.InRange(valve.Cylinder.GaugeBar, 3.8 * 0.4 / 1.5 - 0.15, 3.8 * 0.4 / 1.5 + 0.15);
     }
 
     [Fact]
@@ -141,10 +155,11 @@ public class UicDistributorTests
     {
         var (valve, pipe) = Charged();
         Hold(valve, pipe, 5.4, () => false, 120);
-        // Half a bar under running asks for its own share, not the overcharge's too.
-        Hold(valve, pipe, 4.5, () => false, 60);
+        // The brake valve carries its overcharge through the application: half a bar under it asks for half a bar's share,
+        // and the release goes back to it.
+        Hold(valve, pipe, 4.9, () => false, 60);
         Assert.Equal(3.8 * 0.5 / 1.5, valve.Cylinder.GaugeBar, 1);
-        Hold(valve, pipe, 5.0, () => false, 120);
+        Hold(valve, pipe, 5.4, () => false, 120);
         Assert.False(valve.Applied, "the car stayed applied after the release");
         Assert.InRange(valve.Cylinder.GaugeBar, 0, 0.05);
     }

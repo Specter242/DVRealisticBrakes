@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.2.2"
+EDITION = "1.2.3"
 
 LEFT, RIGHT = 110, W - 144
 
@@ -289,7 +289,7 @@ CHAPTERS = [
         ("p", "On the DE2, DE6, DH4, DM1U, and BE2 each notch of the handle asks for a reduction, and the valve holds the pipe there by itself."),
         ("fig", lambda p, cx, cy: self_lapping_figure(p, cx, cy + 143, True), 345, "FIG. 2.—The self-lapping handle, in Release. *European equipment only."),
         ("pos", [
-            ("Filling stroke", "Past release. Held 0.4 s, it charges a long train quickly, and springs back when let go. Held long, it overcharges the train."),
+            ("Filling stroke", "Past release. Held 0.4 s, it charges a long train quickly; it springs back. Cars keep its overcharge: a cut left standing brakes on a 5 bar engine."),
             ("Release", "Running: the pipe is kept at 5 bar and the brakes come off."),
             ("First notch", "The least reduction."),
             ("Service", "Each notch a deeper reduction, up to full service at 1.5 bar."),
@@ -396,7 +396,7 @@ CHAPTERS = [
         ("h", "5. The Independent, Bailing Off, and the Gauges."),
         ("p", "The independent applies the engine's own brakes only: up to 3.8 bar, on in about 3 seconds and off in about 4. On European engines and the diesels the engine's train brake lets off at a passenger brake's pace, about 18 seconds. The E-T's independent is not self-lapping (chapter 3.2)."),
         ("h2", "Bailing Off."),
-        ("p", "With the train brake applied, click the independent lever: the engine's brakes let go and the train's stay on. Engines joined by MU cable bail off together. A further reduction applies the engine again; a release clears the bail. On the E-T, click and hold (chapter 3.2)."),
+        ("p", "With the train brake applied, click the independent lever: the engine's brakes let go and the train's stay on. Engines joined by MU cable bail off together. A further reduction applies the engine again; a release clears the bail. On the E-T, hold the independent in release (chapter 3.2). The bail-off key, set in the settings, does the same."),
         ("fig", gauges_figure, 300, "FIG. 8.—The gauges in running: main reservoir red, equalizing reservoir blue; brake pipe black, cylinder red."),
         ("p", "Look at the train brake, the independent, or the brake valve cut-out, and the text by the crosshair names its position."),
     ]),
@@ -412,7 +412,8 @@ CHAPTERS = [
             ("Added notches", "The filling stroke, emergency, release, and holding on the handles."),
             ("ER hand", "The equalizing reservoir's blue hand on the steam engines' gauge."),
             ("Bail off", "Clicking the independent bails off."),
-            ("Controls' text", "The text by the crosshair on the brake controls."),
+            ("Bail-off key", "Bails off the engine you are on. Unbound until you set it."),
+            ("Controls' text", "The text by the crosshair on the brake controls and car levers."),
             ("Overlay", "Each car's brake pressures, for the train you are on."),
         ]),
     ]),

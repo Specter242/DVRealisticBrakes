@@ -45,6 +45,7 @@ namespace RealisticBrakes.Controls
         private ControlImplBase control;
         private IndependentHandle handle;
         private bool notchHeld;
+        private bool keyHeld;
         private VRTK_InteractableObject vrLever;
         private float grabbedAt = float.NegativeInfinity;
         private float valueAtGrab;
@@ -130,6 +131,7 @@ namespace RealisticBrakes.Controls
         // while it's held and the trigger bails (the review, 2026-10-28).
         private void Update()
         {
+            PollBailOffKey();
             // A handle with the release notch bails there instead (HoldRelease).
             if (float.IsNegativeInfinity(grabbedAt) || control == null || vrLever != null || ReleaseNotch)
                 return;
@@ -145,9 +147,36 @@ namespace RealisticBrakes.Controls
                 Send();
         }
 
-        private void Bail()
+        // The bail-off key, on the engine the player is on: a full bail as it's pressed, or on the E-T a graduated one while
+        // it's held.
+        private void PollBailOffKey()
         {
-            if (!Main.Active || !Main.Settings.ClickToBailOff || Car == null)
+            var key = Main.Settings?.BailOffKey;
+            var mine = key != null && key.keyCode != KeyCode.None && Main.Active && Car != null && PlayerManager.Car == Car;
+            if (mine && !Graduated(Car))
+            {
+                if (key.Down())
+                    Bail(byKey: true);
+                return;
+            }
+            if (mine && key.Pressed())
+            {
+                keyHeld = true;
+                holdingRelease = true;
+                BailBy(BailRate * Time.deltaTime, false, byKey: true);
+                if (Time.time - sentAt >= SendEvery)
+                    Send();
+            }
+            else if (keyHeld)
+            {
+                keyHeld = false;
+                EndHold();
+            }
+        }
+
+        private void Bail(bool byKey = false)
+        {
+            if (!Main.Active || (!byKey && !Main.Settings.ClickToBailOff) || Car == null)
                 return;
             BailConsist(Car, true);
             // Everyone else's engines bail the same (multiplayer).
@@ -176,7 +205,7 @@ namespace RealisticBrakes.Controls
             {
                 notchHeld = true;
                 holdingRelease = true;
-                BailBy(BailRate * Time.deltaTime, false, notch: true);
+                BailBy(BailRate * Time.deltaTime, false, byKey: true);
                 if (Time.time - sentAt >= SendEvery)
                     Send();
             }
@@ -187,10 +216,11 @@ namespace RealisticBrakes.Controls
             }
         }
 
-        // A graduated bail of amount, Pa, here; sent on now if send, or with the next. The click's unless notch.
-        private void BailBy(double amount, bool send, bool notch = false)
+        // A graduated bail of amount, Pa, here; sent on now if send, or with the next. The click's, unless by the release notch
+        // or the key, which the click setting doesn't turn off.
+        private void BailBy(double amount, bool send, bool byKey = false)
         {
-            if (!Main.Active || (!notch && !Main.Settings.ClickToBailOff) || Car == null)
+            if (!Main.Active || (!byKey && !Main.Settings.ClickToBailOff) || Car == null)
                 return;
             var bailed = BailConsist(Car, false, amount);
             unsent += bailed;
