@@ -289,7 +289,7 @@ namespace RealisticBrakes.Sim
             CarLevers.RefitAll();
             var version = Main.Mod?.Info.Version;
             if (hostVersion != version)
-                Notice.Show($"The host runs Realistic Brakes {hostVersion}, you {version}: brakes may differ");
+                Notice.Warn($"The host runs Realistic Brakes {hostVersion}, you {version}: brakes may differ");
             else if (!mine.SameAs(host))
                 Notice.Show("Realistic Brakes: using the host's brake settings for this session");
         }

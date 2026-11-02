@@ -2,12 +2,7 @@ using UnityEngine;
 
 namespace RealisticBrakes
 {
-    /// <summary>
-    /// A short notice under the crosshair, and in the log: what a click on a
-    /// control did. Drawn below Realistic Firing's own notices, so the two
-    /// mods' never overlap.
-    /// </summary>
-    internal sealed class Notice : MonoBehaviour
+ internal sealed class Notice : MonoBehaviour
     {
         private const float Offset = 96f;
         private const float Seconds = 4f;
@@ -17,12 +12,25 @@ namespace RealisticBrakes
 
         private GUIStyle style;
 
-        /// <summary>Shows <paramref name="message"/> for a few seconds, and logs it.</summary>
+        /// <summary>Shows <paramref name="message"/> for a few seconds, unless the brake controls' text is off, and logs it.</summary>
         public static void Show(string message)
+        {
+            Main.Mod?.Logger.Log(message);
+            if (Main.Settings == null || Main.Settings.ShowValveText)
+                Display(message);
+        }
+
+        /// <summary>Shows <paramref name="message"/> for a few seconds whatever the settings, and logs it as a warning: a real problem.</summary>
+        public static void Warn(string message)
+        {
+            Main.Mod?.Logger.Warning(message);
+            Display(message);
+        }
+
+        private static void Display(string message)
         {
             text = message;
             shownAt = Time.time;
-            Main.Mod?.Logger.Log(message);
         }
 
         private void OnGUI()

@@ -240,7 +240,10 @@ page, or a tab down its edge, to turn to that chapter.
 - **Click to bail off:** on by default.
 - **Bail-off key:** unbound until you set it. It bails off the engine
   you're on, as the click does, even with the click turned off.
-- **Brake controls' text** by the crosshair: on by default.
+- **Brake controls' text** by the crosshair: on by default. It covers
+  the notices after a bail-off or the booklet button too; off, they go to
+  the log only. A warning that a multiplayer host runs another version
+  still shows.
 - **Show each car's brake pressures** (off by default): an overlay for the train you're on:
   pipe, control (or, on American cars, emergency) reservoir, auxiliary
   reservoir, and cylinder, in gauge bar.

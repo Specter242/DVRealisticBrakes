@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.2.3"
+EDITION = "1.2.4"
 
 LEFT, RIGHT = 110, W - 144
 
@@ -413,7 +413,7 @@ CHAPTERS = [
             ("ER hand", "The equalizing reservoir's blue hand on the steam engines' gauge."),
             ("Bail off", "Clicking the independent bails off."),
             ("Bail-off key", "Bails off the engine you are on. Unbound until you set it."),
-            ("Controls' text", "The text by the crosshair on the brake controls and car levers."),
+            ("Controls' text", "The text by the crosshair on the brake controls and car levers, and the notices after a bail-off. Off, the notices go to the log."),
             ("Overlay", "Each car's brake pressures, for the train you are on."),
         ]),
     ]),

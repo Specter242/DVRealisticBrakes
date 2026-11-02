@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.4 (2026-11-02)
+
+- The brake controls' text setting also hides the notices after a
+  bail-off or the booklet button: off, they go to the log only. A warning
+  that a multiplayer host runs another version still shows.
+
 ## 1.2.3 (2026-11-01)
 
 - The S-6 independent (American equipment): lap holds the engine's brakes
