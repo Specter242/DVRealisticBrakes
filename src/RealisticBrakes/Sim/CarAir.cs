@@ -4,6 +4,7 @@ using DV;
 using DV.Simulation.Brake;
 using DV.ThingTypes;
 using HarmonyLib;
+using LocoSim.Implementations;
 using RealisticBrakes.Controls;
 using RealisticBrakes.Core;
 using UnityEngine;
@@ -22,8 +23,9 @@ namespace RealisticBrakes.Sim
         /// <summary>The game's main reservoir ceiling, bar absolute (its compressor clamps there).</summary>
         private const float MainReservoirCeiling = 9f;
 
-        private CarAir(BrakeSystem system, TrainCar car, CarBrake brake, int generation, BrakeRigging rigging)
+        private CarAir(BrakeSystem system, TrainCar car, CarBrake brake, int generation, BrakeRigging rigging, bool vacuum)
         {
+            IsVacuum = vacuum;
             System = system;
             Car = car;
             Brake = brake;
@@ -40,6 +42,14 @@ namespace RealisticBrakes.Sim
             // A rigged car's bogies may hold an earlier model's force (a pooled car, a rebuilt model): the first restore writes the game's.
             forceOverridden = rigging != null;
         }
+
+        /// <summary>
+        /// Whether the car runs the vacuum brake: its stock fields then hold
+        /// air equivalents (<see cref="Core.Vacuum.AirEquivalent"/>), so the
+        /// stock brake, if it takes over, and other code reading them see a
+        /// train charged or applied as this one is.
+        /// </summary>
+        public bool IsVacuum { get; }
 
         /// <summary>The freight car's rigging, whose force is its own rather than its load's; null for cars the game's force stays on (engines, tenders, coaches).</summary>
         public BrakeRigging Rigging { get; }
@@ -85,8 +95,11 @@ namespace RealisticBrakes.Sim
         /// <summary>The air let out this frame, in the game's units, for the audio.</summary>
         public float ExhaustFlow { get; private set; }
 
-        /// <summary>The car's pipe pressure, bar absolute, for its gauge.</summary>
-        public float PipeBar => Bar(Brake.PipeSection.Pressure);
+        /// <summary>The car's pipe pressure, bar absolute, for its gauge: on vacuum, its air equivalent.</summary>
+        public float PipeBar => Bar(Stock(Brake.PipeSection.Pressure));
+
+        /// <summary><paramref name="pascals"/> as the stock fields hold it: on vacuum, its air equivalent.</summary>
+        private double Stock(double pascals) => pascals;
 
         /// <summary>Builds a car's air from its brake setup and the pressures the game holds for it now.</summary>
         public static CarAir Create(BrakeSystem system, float pipePressure, int generation)
@@ -138,8 +151,9 @@ namespace RealisticBrakes.Sim
                 brake = new CarBrake(length, geometry);
             }
             brake.PipeSection.Pressure = pipe;
-            return new CarAir(system, car, brake, generation, RiggingFor(car));
+            return new CarAir(system, car, brake, generation, RiggingFor(car), vacuum: false);
         }
+
 
         // Each car type's heaviest cargo, kg, once worked out.
         private static readonly Dictionary<TrainCarType_v2, float> heaviestCargo = new Dictionary<TrainCarType_v2, float>();
@@ -281,18 +295,19 @@ namespace RealisticBrakes.Sim
                 changed = true;
             }
 
-            if (engine == null)
+            var mainReservoir = engine?.MainReservoir;
+            if (mainReservoir == null)
                 return changed;
-            if (bs.mainResVolume > 0 && Mathf.Abs(bs.mainResVolume / 1000f - (float)engine.MainReservoir.Volume) > 1e-4f)
+            if (bs.mainResVolume > 0 && Mathf.Abs(bs.mainResVolume / 1000f - (float)mainReservoir.Volume) > 1e-4f)
             {
-                engine.MainReservoir.Resize(bs.mainResVolume / 1000.0);
+                mainReservoir.Resize(bs.mainResVolume / 1000.0);
                 changed = true;
             }
             // Another mod writing the stock field directly, past the setters.
             var stock = MainReservoirUnsmoothed(bs);
             if (!float.IsNaN(writtenMainReservoir) && Mathf.Abs(stock - writtenMainReservoir) > 1e-4f)
             {
-                engine.MainReservoir.Pressure = Pa(stock);
+                mainReservoir.Pressure = Pa(stock);
                 changed = true;
             }
             var compressing = bs.compressorProductionRate > 0.001f;
@@ -362,6 +377,7 @@ namespace RealisticBrakes.Sim
             return changed;
         }
 
+
         /// <summary>Notes a value set from outside (a stock setter), which wakes the car's line.</summary>
         public void Touch() => touched = true;
 
@@ -382,9 +398,10 @@ namespace RealisticBrakes.Sim
             var exhaust = 0.0;
             if (valve != null)
             {
-                bs.auxReservoirPressure = Bar(valve.AuxiliaryReservoir.Pressure);
-                // An American valve has no control reservoir; its auxiliary stands in, so the stock brake, if it takes over, sees no reduction.
-                bs.controlReservoirPressure = Bar(Brake.Distributor?.ControlReservoir.Pressure ?? valve.AuxiliaryReservoir.Pressure);
+                bs.auxReservoirPressure = Bar(Stock(valve.AuxiliaryReservoir.Pressure));
+                // An American valve has no control reservoir; its auxiliary stands in, so the stock brake, if it takes over, sees
+                // no reduction. A vacuum car's chamber stands in for both.
+                bs.controlReservoirPressure = Bar(Stock(Brake.Distributor?.ControlReservoir.Pressure ?? valve.AuxiliaryReservoir.Pressure));
                 bs.brakeCylinderPressureUnsmoothed = Bar(valve.Cylinder.Pressure);
                 // As the stock brake counts it: the reservoirs' charging and the cylinder's filling.
                 pipeIn += valve.ChargeFlow + valve.FillFlow;
@@ -405,12 +422,7 @@ namespace RealisticBrakes.Sim
                     exhaust += engine.DriverValve.ExhaustFlow;
                 }
 
-                ref var mr = ref MainReservoirUnsmoothed(bs);
-                var before = mr;
-                mr = Bar(engine.MainReservoir.Pressure);
-                writtenMainReservoir = mr;
-                if (Mathf.Abs(bs.mainReservoirPressure - mr) > 0.0001f || before != mr)
-                    bs.Fire_MainReservoirPressureChanged();
+                var mr = WriteMainReservoir(engine.MainReservoir);
                 // The E-T's duplex governor, set by the handle; otherwise the game's.
                 var setting = engine.GovernorSetting(Brake.PipeSection);
                 var on = double.IsNaN(setting) ? bs.compressorActivationPressure : Bar(Air.Atmosphere + setting - engine.Spec.GovernorDifferential);
@@ -422,6 +434,19 @@ namespace RealisticBrakes.Sim
             }
             PipeFlow = (float)pipeIn * StockFlowPerKgPerSecond;
             ExhaustFlow = (float)exhaust * StockFlowPerKgPerSecond;
+        }
+
+        /// <summary>Writes the model's main reservoir to the stock field, telling its readers when it moved; returns it, bar absolute.</summary>
+        private float WriteMainReservoir(Chamber reservoir)
+        {
+            var bs = System;
+            ref var mr = ref MainReservoirUnsmoothed(bs);
+            var before = mr;
+            mr = Bar(reservoir.Pressure);
+            writtenMainReservoir = mr;
+            if (Mathf.Abs(bs.mainReservoirPressure - mr) > 0.0001f || before != mr)
+                bs.Fire_MainReservoirPressureChanged();
+            return mr;
         }
 
         internal static float Bar(double pascals) => (float)Air.ToAbsoluteBar(pascals);

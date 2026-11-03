@@ -251,6 +251,9 @@ namespace RealisticBrakes.AdapterCheck
             var draw = typeof(Settings).GetField(nameof(Settings.LoadBraking)).GetCustomAttributes(true).OfType<UnityModManagerNet.DrawAttribute>().SingleOrDefault();
             Check(settings.LoadBraking == LoadBraking.Period && draw != null && draw.VisibleOn == "Equipment|American",
                 "American cars' load braking starts at Period, in the menu only with American equipment");
+            var direct = typeof(Settings).GetField(nameof(Settings.DirectAdmission)).GetCustomAttributes(true).OfType<UnityModManagerNet.DrawAttribute>().SingleOrDefault();
+            Check(direct == null && !Enum.IsDefined(typeof(Equipment), 2),
+                "the public build has no vacuum equipment and no DA valve setting in the menu");
         }
 
         private static void CheckPumpSteam()

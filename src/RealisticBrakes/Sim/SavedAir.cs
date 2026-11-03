@@ -36,7 +36,7 @@ namespace RealisticBrakes.Sim
                 return null;
             var entry = Write(air.Brake);
             var zone = TrainBrakeHandle.ZoneOf(system);
-            if (air.Brake.Locomotive != null && TrainBrakeHandle.Stays(zone, system))
+            if (HasEngine(air.Brake) && TrainBrakeHandle.Stays(zone, system))
                 entry["zone"] = (int)zone;
             return entry;
         }
@@ -67,6 +67,9 @@ namespace RealisticBrakes.Sim
             }
             return entry;
         }
+
+        // Whether the car is an engine, air or vacuum, whose handle's added notch is saved with it.
+        private static bool HasEngine(CarBrake brake) => brake.Locomotive != null;
 
         private static void WriteAmerican(JObject entry, AarControlValve valve)
         {
@@ -139,7 +142,7 @@ namespace RealisticBrakes.Sim
             pending.Remove(air.System);
             Read(entry, air.Brake);
             var zone = (int?)entry["zone"];
-            if (zone.HasValue && air.Brake.Locomotive != null && air.Car != null && TrainBrakeHandle.Stays((HandleZone)zone.Value, air.System))
+            if (zone.HasValue && HasEngine(air.Brake) && air.Car != null && TrainBrakeHandle.Stays((HandleZone)zone.Value, air.System))
                 TrainBrakeHandle.SetRemoteZone(air.Car, (HandleZone)zone.Value, TrainBrakeHandle.LocalHand);
         }
 
@@ -148,12 +151,14 @@ namespace RealisticBrakes.Sim
         {
             if ((int?)entry["v"] != Version)
                 return;
-            if (brake.Distributor != null && (string)entry["family"] != "AAR")
+            // A car reads only its own family's entry: a European one has none, an American one "AAR", a vacuum one "VAC".
+            var family = (string)entry["family"];
+            if (brake.Distributor != null && family == null)
                 ReadValve(entry, brake.Distributor, "");
             if (brake.ControlValve != null)
                 ReadAmerican(entry, brake.ControlValve);
             var engine = brake.Locomotive;
-            if (engine != null)
+            if (engine != null && family != "VAC")
             {
                 ReadValve(entry, engine.Distributor, "loco");
                 engine.BailedOff = ((float?)entry["bailed"] ?? 0f) * Air.Bar;

@@ -240,6 +240,7 @@ namespace RealisticBrakes.Sim
             public bool ManualEmptyLoaded;
             public bool WidenTrainBrakeHandles;
             public LoadBraking LoadBraking;
+            public bool DirectAdmission;
 
             public static ModelSettings From(Settings s) => new ModelSettings
             {
@@ -250,6 +251,7 @@ namespace RealisticBrakes.Sim
                 ManualEmptyLoaded = s.ManualEmptyLoaded,
                 WidenTrainBrakeHandles = s.WidenTrainBrakeHandles,
                 LoadBraking = s.LoadBraking,
+                DirectAdmission = s.DirectAdmission,
             };
 
             public void To(Settings s)
@@ -261,11 +263,13 @@ namespace RealisticBrakes.Sim
                 s.ManualEmptyLoaded = ManualEmptyLoaded;
                 s.WidenTrainBrakeHandles = WidenTrainBrakeHandles;
                 s.LoadBraking = LoadBraking;
+                s.DirectAdmission = DirectAdmission;
             }
 
             public bool SameAs(ModelSettings o) =>
                 Enabled == o.Enabled && Equipment == o.Equipment && BrakeForceFromCar == o.BrakeForceFromCar && FreightMode == o.FreightMode
-                && ManualEmptyLoaded == o.ManualEmptyLoaded && WidenTrainBrakeHandles == o.WidenTrainBrakeHandles && LoadBraking == o.LoadBraking;
+                && ManualEmptyLoaded == o.ManualEmptyLoaded && WidenTrainBrakeHandles == o.WidenTrainBrakeHandles && LoadBraking == o.LoadBraking
+                && DirectAdmission == o.DirectAdmission;
         }
 
         /// <summary>This player's own model settings while a host's are in use; null otherwise.</summary>

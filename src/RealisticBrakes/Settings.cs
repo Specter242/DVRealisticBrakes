@@ -8,6 +8,7 @@ namespace RealisticBrakes
     {
         European,
         American,
+
     }
 
     /// <summary>How American freight cars' brakes are sized for their load.</summary>
@@ -31,6 +32,9 @@ namespace RealisticBrakes
 
         [Draw("Brake equipment, for the cars and the steam engines and DM3: European (UIC distributors, graduated release, G/P; the engines keep a self-lapping independent) or American (AB valves, direct release, retainers, emergency reservoirs; the engines get the E-T, its H-6 brake valve and S-6 independent). Changing it re-reads every car", DrawType.ToggleGroup)]
         public Equipment Equipment = Equipment.European;
+
+        // Synced in multiplayer whatever the build, so the session's packets read alike.
+        public bool DirectAdmission = true;
 
         [Draw("Freight cars brake with their own force, not their load's: a loaded car stops slower than an empty one, and each car's empty/loaded valve, set from its load, matters")]
         public bool BrakeForceFromCar = true;

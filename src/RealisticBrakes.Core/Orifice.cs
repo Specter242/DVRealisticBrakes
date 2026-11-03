@@ -103,6 +103,14 @@ namespace RealisticBrakes.Core
         }
 
         /// <summary>
+        /// Opens <paramref name="chamber"/> to the atmosphere through this
+        /// orifice for <paramref name="dt"/> s, whichever way the air runs: out
+        /// of a charged air pipe, as <see cref="Vent"/> does, or into a vacuum
+        /// pipe. Returns the mass let out, kg: negative when air came in.
+        /// </summary>
+        public double OpenToAtmosphere(Chamber chamber, double dt) => Pass(chamber, null, dt);
+
+        /// <summary>
         /// Vents <paramref name="chamber"/> through this orifice to the
         /// atmosphere for <paramref name="dt"/> s, no lower than
         /// <paramref name="floor"/> Pa. Returns the mass let out, kg.

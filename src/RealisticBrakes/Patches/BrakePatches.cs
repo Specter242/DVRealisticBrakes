@@ -120,7 +120,7 @@ namespace RealisticBrakes.Patches
         {
             if (BrakeSets.TryGet(__instance, out var air) && __instance.brakeset != null && __instance.brakeset.cars.Count == 1)
             {
-                air.Brake.PipeSection.Pressure = CarAir.Pa(value);
+                air.Brake.PipeSection.Pressure = FromStock(air, CarAir.Pa(value));
                 air.Touch();
             }
         }
@@ -129,9 +129,10 @@ namespace RealisticBrakes.Patches
         [HarmonyPatch(nameof(BrakeSystem.SetMainReservoirPressure))]
         private static void MainReservoirSet(BrakeSystem __instance, float value)
         {
-            if (BrakeSets.TryGet(__instance, out var air) && air.Brake.Locomotive != null)
+            var reservoir = BrakeSets.TryGet(__instance, out var air) ? air.Brake.Locomotive?.MainReservoir : null;
+            if (reservoir != null)
             {
-                air.Brake.Locomotive.MainReservoir.Pressure = CarAir.Pa(value);
+                reservoir.Pressure = CarAir.Pa(value);
                 air.Touch();
             }
         }
@@ -144,7 +145,7 @@ namespace RealisticBrakes.Patches
                 return;
             var valve = air.Brake.Valve ?? air.Brake.Locomotive?.Distributor;
             if (valve != null)
-                valve.AuxiliaryReservoir.Pressure = CarAir.Pa(value);
+                valve.AuxiliaryReservoir.Pressure = FromStock(air, CarAir.Pa(value));
             air.Touch();
         }
 
@@ -170,12 +171,17 @@ namespace RealisticBrakes.Patches
 
         private static void CylinderSet(BrakeSystem system)
         {
-            if (BrakeSets.TryGet(system, out var air) && air.Brake.Cylinder != null)
+            // A vacuum car's cylinder stands for its piston's force, which follows its chamber and pipe; a forced value has
+            // nothing to set.
+            if (BrakeSets.TryGet(system, out var air) && air.Brake.Cylinder != null && !air.IsVacuum)
             {
                 air.Brake.Cylinder.Pressure = CarAir.Pa(system.brakeCylinderPressureUnsmoothed);
                 air.Touch();
             }
         }
+
+        // A value set in a stock field: on vacuum, an air equivalent of the vacuum it stands for.
+        private static double FromStock(CarAir air, double pascals) => pascals;
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(BrakeSystem.ResetState))]

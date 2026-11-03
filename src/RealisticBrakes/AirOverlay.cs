@@ -1,4 +1,5 @@
 using System.Text;
+using DV.Simulation.Brake;
 using RealisticBrakes.Core;
 using RealisticBrakes.Sim;
 using UnityEngine;
@@ -44,9 +45,9 @@ namespace RealisticBrakes
                 return;
             if (!BrakeSets.TryGetLine(car.brakeSystem.brakeset, out var line))
                 return;
+            var set = car.brakeSystem.brakeset;
             text.AppendLine($"Realistic Brakes: {line.Cars.Count} cars, gauge bar");
             text.AppendLine(" #  car            pipe   ctrl   aux    cyl    (ctrl: the American valve's emergency reservoir)");
-            var set = car.brakeSystem.brakeset;
             var count = set.cars.Count;
             for (var i = 0; i < count; i++)
             {
@@ -85,6 +86,7 @@ namespace RealisticBrakes
                 text.AppendLine();
             }
         }
+
 
         private static string G(double pascals) => Air.ToGaugeBar(pascals).ToString("F2");
 

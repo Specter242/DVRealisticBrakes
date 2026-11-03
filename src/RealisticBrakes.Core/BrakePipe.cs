@@ -33,6 +33,7 @@ namespace RealisticBrakes.Core
         public double SectionVolume(double carLength) => Area * carLength + HoseVolume;
 
         public static PipeGeometry Uic() => new PipeGeometry();
+
     }
 
     /// <summary>
@@ -93,10 +94,10 @@ namespace RealisticBrakes.Core
         public bool RearOpen { get; set; }
 
 
-        /// <summary>The air let out at the ends in the last step, kg/s, for the hoses' sound.</summary>
+        /// <summary>The air let out at the front end in the last step, or let in on a vacuum pipe, kg/s, for the hoses' sound.</summary>
         public double FrontVentFlow { get; private set; }
 
-        /// <summary>The air let out at the rear end in the last step, kg/s.</summary>
+        /// <summary>The air let out at the rear end in the last step, or let in, kg/s.</summary>
         public double RearVentFlow { get; private set; }
 
         /// <summary>The mass flow, kg/s, from section <paramref name="link"/> to the one behind it.</summary>
@@ -165,8 +166,8 @@ namespace RealisticBrakes.Core
                     s.Mass = 0;
         }
 
-        // An end's flow to the air through its open cock, kg/s.
-        private double Vent(bool open, Chamber end, double dt) => open ? Geometry.OpenEnd.Vent(end, dt) / dt : 0;
+        // An end's flow through its open cock, out of an air pipe or into a vacuum one, kg/s.
+        private double Vent(bool open, Chamber end, double dt) => open ? Math.Abs(Geometry.OpenEnd.OpenToAtmosphere(end, dt)) / dt : 0;
 
         /// <summary>
         /// The Darcy friction factor times the flow's magnitude, kg/s:

@@ -389,6 +389,7 @@ namespace RealisticBrakes.Sim
                 writer.Write(netId);
             // After the cars, so an older guest reads what it knows and stops.
             writer.Write((byte)Settings.LoadBraking);
+            writer.Write(Settings.DirectAdmission);
         }
 
         public void Deserialize(BinaryReader reader)
@@ -404,6 +405,8 @@ namespace RealisticBrakes.Sim
                 WidenTrainBrakeHandles = reader.ReadBoolean(),
                 // An older host has no load braking setting: its American cars have automatic empty/load.
                 LoadBraking = LoadBraking.EmptyLoad,
+                // Nor vacuum equipment, whose DA valves are on by default.
+                DirectAdmission = true,
             };
             Sequence = reader.ReadUInt32();
             States.Clear();
@@ -422,6 +425,8 @@ namespace RealisticBrakes.Sim
                 Cars.Add(reader.ReadUInt16());
             if (!reader.BaseStream.CanSeek || reader.BaseStream.Position < reader.BaseStream.Length)
                 Settings.LoadBraking = (LoadBraking)reader.ReadByte();
+            if (!reader.BaseStream.CanSeek || reader.BaseStream.Position < reader.BaseStream.Length)
+                Settings.DirectAdmission = reader.ReadBoolean();
         }
     }
 }

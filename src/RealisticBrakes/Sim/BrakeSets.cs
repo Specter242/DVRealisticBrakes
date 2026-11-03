@@ -17,7 +17,10 @@ namespace RealisticBrakes.Sim
     /// </summary>
     internal static class BrakeSets
     {
-        public static readonly PipeGeometry Geometry = PipeGeometry.Uic();
+        private static readonly PipeGeometry AirPipe = PipeGeometry.Uic();
+
+        /// <summary>The 1¼ in air pipe.</summary>
+        public static PipeGeometry Geometry => AirPipe;
 
         private static readonly ConditionalWeakTable<BrakeSystem, CarAir> cars = new ConditionalWeakTable<BrakeSystem, CarAir>();
         private static readonly ConditionalWeakTable<Brakeset, BrakeLine> lines = new ConditionalWeakTable<Brakeset, BrakeLine>();
@@ -55,23 +58,43 @@ namespace RealisticBrakes.Sim
 
  public static bool AiDriven(Brakeset set)
         {
-            if (!aiDriverLooked)
-            {
-                aiDriverLooked = true;
-                aiDriver = AccessTools.TypeByName("AITraffic.Driver.AIEngineer");
-                if (aiDriver != null)
-                    Main.Mod?.Logger.Log("AI Traffic is here: the trains its drivers run keep the game's own brake");
-            }
-            if (aiDriver == null)
+            if (AiDriver == null)
                 return false;
             foreach (var system in set.cars)
-                if (system != null && system.hasCompressor)
-                {
-                    var car = TrainCar.Resolve(system.gameObject);
-                    if (car != null && car.GetComponent(aiDriver) != null)
-                        return true;
-                }
+                if (system != null && system.hasCompressor && AiDrives(TrainCar.Resolve(system.gameObject)))
+                    return true;
             return false;
+        }
+
+        /// <summary>Whether AI Traffic drives any engine of <paramref name="set"/>, a cut of coupled cars (<see cref="HandBrakeHold"/>).</summary>
+        public static bool AiDriven(Trainset set)
+        {
+            if (AiDriver == null || set == null)
+                return false;
+            foreach (var car in set.cars)
+                if (car != null && car.brakeSystem != null && car.brakeSystem.hasCompressor && AiDrives(car))
+                    return true;
+            return false;
+        }
+
+        /// <summary>Whether AI Traffic is loaded.</summary>
+        public static bool AiTrafficPresent => AiDriver != null;
+
+        private static bool AiDrives(TrainCar car) => car != null && car.GetComponent(AiDriver) != null;
+
+        private static Type AiDriver
+        {
+            get
+            {
+                if (!aiDriverLooked)
+                {
+                    aiDriverLooked = true;
+                    aiDriver = AccessTools.TypeByName("AITraffic.Driver.AIEngineer");
+                    if (aiDriver != null)
+                        Main.Mod?.Logger.Log("AI Traffic is here: the trains its drivers run keep the game's own brake");
+                }
+                return aiDriver;
+            }
         }
 
         // The M62's own brake (helmutgross's M62-130, Nexus mod 1692; its M62Logic.M62_394_Behavior on each M62), looked up by
@@ -194,17 +217,23 @@ namespace RealisticBrakes.Sim
         /// <summary>
         /// The set's one stock pipe pressure, bar absolute, for code that
         /// reads it (the remote's brake readout): the pipe at the engine whose
-        /// driver's valve is cut in, or at the first car when none is.
+        /// driver's valve is cut in, or at the first car when none is; on
+        /// vacuum, its air equivalent.
         /// </summary>
         private static float SetPressure(Brakeset set, BrakeLine line)
         {
+            var at = 0;
             for (var i = 0; i < line.Cars.Count; i++)
             {
-                var valve = line.Cars[i].Locomotive?.DriverValve;
-                if (valve != null && valve.CutIn)
-                    return CarAir.Bar(line.Pipe[i].Pressure);
+                var car = line.Cars[i];
+                if (car.Locomotive?.DriverValve?.CutIn == true)
+                {
+                    at = i;
+                    break;
+                }
             }
-            return CarAir.Bar(line.Pipe[0].Pressure);
+            var pressure = line.Pipe[at].Pressure;
+            return CarAir.Bar(pressure);
         }
 
         /// <summary>

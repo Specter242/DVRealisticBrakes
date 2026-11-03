@@ -35,6 +35,17 @@ namespace RealisticBrakes.Core
             Pressure = pressure;
         }
 
+        /// <summary>
+        /// Changes the volume, keeping the air: a piston moving in its
+        /// cylinder compresses one side and expands the other.
+        /// </summary>
+        public void Displace(double volume)
+        {
+            if (!(volume > 0))
+                throw new ArgumentOutOfRangeException(nameof(volume), volume, "A chamber needs a positive volume.");
+            Volume = volume;
+        }
+
         /// <summary>The air held, kg.</summary>
         public double Mass { get; set; }
 

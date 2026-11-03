@@ -29,6 +29,15 @@ namespace RealisticBrakes.Sim
         private readonly List<HeldCar> held = new List<HeldCar>();
         private readonly HashSet<TrainCar> scaled = new HashSet<TrainCar>();
         private readonly HashSet<TrainCar> scaledNow = new HashSet<TrainCar>();
+
+        // The cars whose hand brakes SecureFresh set, until they come off or a driver takes them over.
+        private readonly HashSet<TrainCar> secured = new HashSet<TrainCar>();
+        private readonly List<TrainCar> freed = new List<TrainCar>();
+        private readonly Dictionary<Trainset, bool> drivenSets = new Dictionary<Trainset, bool>();
+        private float nextFreeing;
+
+        // How often the cuts secured here are looked at for a driver, s.
+        private const float FreeingInterval = 0.5f;
         private CarSpawner spawner;
 
         // The game's easing rate for a car's braking factor (BrakeSystem.brakingFactorRef, internal).
@@ -41,6 +50,7 @@ namespace RealisticBrakes.Sim
             if (Main.Active)
             {
                 SecureFresh();
+                FreeForDrivers();
                 foreach (var set in Trainset.allSets)
                     if (set != null && Standing(set))
                         Hold(set);
@@ -64,6 +74,7 @@ namespace RealisticBrakes.Sim
                 spawner.CarSpawned -= OnSpawned;
             spawner = current;
             fresh.Clear();
+            secured.Clear();
             if (spawner != null)
                 spawner.CarSpawned += OnSpawned;
         }
@@ -284,18 +295,60 @@ namespace RealisticBrakes.Sim
             }
             foreach (var set in sets)
             {
-                if (!Standing(set) || Weigh(set))
+                // Weighed last: it works out every car's force.
+                var standing = Standing(set);
+                var driven = standing && BrakeSets.AiDriven(set);
+                if (!FreshCut.Secures(standing, driven, standing && !driven && Weigh(set)))
                     continue;
                 var set_ = 0;
                 foreach (var car in set.cars)
                     if (car.brakeSystem != null && car.brakeSystem.hasHandbrake && car.brakeSystem.handbrakePosition < 1f)
                     {
                         car.brakeSystem.SetHandbrakePosition(1f);
+                        secured.Add(car);
                         set_++;
                     }
                 if (set_ > 0)
                     Main.Mod?.Logger.Log($"Set {set_} hand brakes on a standing cut of {set.cars.Count} cars that its brakes couldn't hold (from {set.firstCar?.ID})");
             }
+        }
+
+        // Hand brakes SecureFresh set come off when a driver takes their cut over (AI Traffic puts its driver on a few frames
+        // after spawning, and may not have by the time the cut is weighed); one anyone has moved since is no longer this mod's.
+        private void FreeForDrivers()
+        {
+            if (secured.Count == 0 || Net.IsGuest || Time.time < nextFreeing)
+                return;
+            nextFreeing = Time.time + FreeingInterval;
+            // Without AI Traffic no driver will come.
+            if (!BrakeSets.AiTrafficPresent)
+            {
+                secured.Clear();
+                return;
+            }
+            freed.Clear();
+            drivenSets.Clear();
+            foreach (var car in secured)
+            {
+                if (car == null || car.brakeSystem == null || car.brakeSystem.handbrakePosition < FreshCut.FullOn)
+                {
+                    freed.Add(car);
+                    continue;
+                }
+                var set = car.trainset;
+                if (set == null)
+                    continue;
+                if (!drivenSets.TryGetValue(set, out var driven))
+                    drivenSets[set] = driven = BrakeSets.AiDriven(set);
+                if (FreshCut.Frees(driven, car.brakeSystem.handbrakePosition))
+                {
+                    car.brakeSystem.SetHandbrakePosition(0f);
+                    freed.Add(car);
+                    Main.Mod?.Logger.Log($"Took off the hand brake set on {car.ID}: a driver has taken its train (AI Traffic)");
+                }
+            }
+            foreach (var car in freed)
+                secured.Remove(car);
         }
     }
 }

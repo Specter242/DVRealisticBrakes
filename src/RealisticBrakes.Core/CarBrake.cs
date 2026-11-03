@@ -5,9 +5,10 @@ namespace RealisticBrakes.Core
 {
     /// <summary>
     /// One car's air brake: its length of brake pipe and what hangs off it.
-    /// That is a valve (European or American) with its reservoirs and
-    /// cylinder on a car, an engine's brake on a locomotive, or nothing on a
-    /// car that only passes the pipe through (a tender copying its engine).
+    /// That is a valve (European, American, or vacuum) with its reservoirs and
+    /// cylinder on a car, an engine's brake on a locomotive (air or vacuum),
+    /// or nothing on a car that only passes the pipe through (a tender
+    /// copying its engine).
     /// It outlives any one train: cars couple and uncouple, and their pipes
     /// are joined anew, but each car keeps its own air.
     /// </summary>
@@ -56,9 +57,11 @@ namespace RealisticBrakes.Core
         /// <summary>The car's American control valve, or null.</summary>
         public AarControlValve ControlValve => Valve as AarControlValve;
 
+        /// <summary>The engine's air brake, or null.</summary>
         public LocomotiveBrake Locomotive { get; }
 
-        /// <summary>A leak from the car's pipe to the air, or a closed orifice for none.</summary>
+
+        /// <summary>A leak between the car's pipe and the air (out of an air pipe, into a vacuum one), or a closed orifice for none.</summary>
         public Orifice PipeLeak { get; set; }
 
         /// <summary>The car's brake cylinder, or null when it has none of its own.</summary>
@@ -88,7 +91,7 @@ namespace RealisticBrakes.Core
             Valve?.Step(PipeSection, dt);
             Locomotive?.Step(PipeSection, dt);
             if (PipeLeak.IsOpen)
-                PipeLeak.Vent(PipeSection, dt);
+                PipeLeak.OpenToAtmosphere(PipeSection, dt);
         }
     }
 }

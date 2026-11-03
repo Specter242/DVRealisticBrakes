@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.5 (2026-11-03)
+
+- Trains the AI Traffic mod spawns and drives no longer get every hand
+  brake put on as they spawn, which left them stuck with red-hot brakes.
+  A parked cut that its brakes can't hold still gets its hand brakes.
+
 ## 1.2.4 (2026-11-02)
 
 - The brake controls' text setting also hides the notices after a
