@@ -73,9 +73,9 @@ while they recharge.
   The remote and driver mods use the handle's usual range only.
 - **Manual-lap handles** (the S282, S060, DM3, and the Custom Car Loader
   steamers): the handle's positions are release, running, lap, service,
-  and emergency. These engines get the E-T, the H-6 brake valve and the
-  S-6 independent, only with the brake equipment setting on **American**;
-  on European, the default, their independent is self-lapping.
+  and emergency. The American engines among them (the S282, S060, and
+  American custom engines) have the E-T: the H-6 brake valve and the S-6
+  independent. On European equipment their independent is self-lapping.
   - **Release**, one notch before running, is new. It feeds the main
     reservoir straight into the pipe to release a long train quickly. It
     stays where you leave it, as on the real valve. Left there, it
@@ -84,7 +84,7 @@ while they recharge.
   - In **service** the equalizing reservoir comes down while you hold the
     handle there. Move to **lap** when it reaches the reduction you want,
     and the pipe follows and holds.
-  - With **American equipment** the handle has the real H-6's
+  - On an **American engine** the handle has the real H-6's
     **holding** position between running and lap: the train releases and
     recharges as in running, but the engine's own brakes stay on. Release,
     holding, then running is the real drill on a long train. In release
@@ -142,7 +142,7 @@ while they recharge.
   off together. A further reduction applies the engine again; a release
   clears the bail. A setting turns the click off. A bail-off key, set in
   the mod's settings, does the same from wherever you stand in the cab.
-  - With **American equipment** a steam engine bails off a little at a
+  - An **American** steam engine bails off a little at a
     time, as the real E-T does: hold the independent in release, the notch
     below running, and the engine's brakes let off for as long as you hold
     it there; it springs back to running. On a handle without notches,
@@ -159,10 +159,18 @@ while they recharge.
 
 ## European or American equipment
 
-The brake equipment setting chooses the cars' equipment and the steam
-engines' and DM3's brake valves. **European** is the default. Only
-**American** gives those engines the E-T: the H-6 brake valve, with
-holding, and the S-6 independent.
+Each engine carries its own prototype's equipment. The **S282**, **S060**,
+and the American custom engines (the FEF-3, the Union Pacific 4-8-4s, the
+2901, the Hudson, the C-16, the EMC E-series, the FPD-4, the JK3, and the
+QJ) are **American**. The steam engines among them get the E-T, the H-6
+brake valve with holding and the S-6 independent, and the diesels the 26-L.
+The stock diesels and the BR95 are **European**.
+
+The brake equipment setting chooses the cars' equipment, all of them, and
+that of any engine not named here. **European** is the default. A box
+under it, "Every engine uses the brake equipment above", puts every engine
+on the setting instead. Any engine's brake valve works any car, as both
+kinds work off the same 5 bar pipe.
 
 - **European (UIC distributors):**
   - Releases in steps: let the pipe up a little and the brakes come off a
@@ -226,15 +234,18 @@ page, or a tab down its edge, to turn to that chapter.
 
 - **Run the realistic brake:** off gives the game's own brake back at once,
   from the pressures this one left.
-- **Brake equipment:** European or American, for the cars and the steam
-  engines' and DM3's brake valves (American: the E-T's H-6 and S-6).
+- **Brake equipment:** European or American, for the cars and for the
+  engines whose own isn't known.
+- **Every engine uses the brake equipment above:** off by default, so each
+  engine has its own prototype's equipment; on, every engine uses the
+  setting.
 - **Brake force from the car:** loaded and empty cars stop differently.
 - **American cars' load braking:** Period (no empty/load valve, the
   default) or EmptyLoad (automatic). Shown with American equipment.
 - **Freight cars' G/P lever** as cars come into service.
 - **Train brake handles' added notches:** the diesels' filling stroke and
-  emergency, and the steam engines' release (and holding, with American
-  equipment). On by default; it takes effect as a cab loads.
+  emergency, and the steam engines' release (and holding, on American
+  engines). On by default; it takes effect as a cab loads.
 - **Equalizing reservoir hand** on the steam engines' main reservoir
   gauge: on by default; it takes effect as a cab loads.
 - **Click to bail off:** on by default.

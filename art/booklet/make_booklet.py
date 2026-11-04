@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.2.5"
+EDITION = "1.3.0"
 
 LEFT, RIGHT = 110, W - 144
 
@@ -281,7 +281,7 @@ CHAPTERS = [
         ("p", "To apply the brakes the engineman lowers the pipe: each car's valve feels the fall and lets its reservoir's air into its brake cylinder. A deeper reduction brakes harder; 1.5 bar is full service. Raising the pipe again releases the brakes."),
         ("p", "The change runs down the train at about the speed of sound, so the rear brakes later than the front. A freight car's cylinder takes its real 18 to 30 seconds to fill, and a long train takes minutes to release and recharge."),
         ("p", "A leak or a slow drift does not apply the brakes; a reduction does. A sudden fall, as from a parted train, is an emergency."),
-        ("note", "The equipment setting chooses European (UIC), the default, or American (AB); each has its own chapters."),
+        ("note", "Engines have their prototype's equipment, cars the setting's. Each kind has its own chapters."),
     ]),
     dict(number="2", title="European Equipment", head="European Equipment.", tab="EUROPEAN", group=True, blocks=[]),
     dict(number="2.1", title="Diesels: the self-lapping brake valve", head="European Equipment. The Diesels.", blocks=[
@@ -308,7 +308,7 @@ CHAPTERS = [
             ("Service", "The equalizing reservoir comes down while the handle is held here."),
             ("Emergency", "The pipe is opened wide."),
         ]),
-        ("note", "The H-6 and S-6 (3.2) come only with American equipment."),
+        ("note", "American steam engines have the H-6 and S-6 (3.2)."),
     ]),
     dict(number="2.3", title="Cars: the UIC distributor, G and P", head="European Equipment. The Cars.", blocks=[
         ("h", "2.3. The UIC Distributor."),
@@ -323,7 +323,7 @@ CHAPTERS = [
     dict(number="3", title="American Equipment", head="American Equipment.", tab="AMERICAN", group=True, blocks=[]),
     dict(number="3.1", title="Diesels: the 26-L brake valve", head="American Equipment. The Diesels.", blocks=[
         ("h", "3.1. The 26-L Brake Valve."),
-        ("p", "The diesels' handle is self-lapping, as on European equipment, but the 26-L has no filling stroke."),
+        ("p", "The American diesels' handle is self-lapping, as on European equipment, but the 26-L has no filling stroke."),
         ("fig", lambda p, cx, cy: self_lapping_figure(p, cx, cy + 143, False), 345, "FIG. 4.—The 26-L handle, in Release."),
         ("pos", [
             ("Release", "Running: the pipe is kept at 5 bar."),
@@ -335,7 +335,7 @@ CHAPTERS = [
     ]),
     dict(number="3.2", title="Steam engines and DM3: the E-T brake valve", head="American Equipment. The E-T Brake.", blocks=[
         ("h", "3.2. The H-6 Automatic Brake Valve."),
-        ("p", "Only with American equipment do the steam engines and the DM3 have the E-T: the H-6 and the S-6."),
+        ("p", "The American steam engines, the S282, S060, and American custom steamers, have the E-T: the H-6 and the S-6."),
         ("fig", lambda p, cx, cy: valve_figure(p, cx, cy - 20, 115, H6, [200, 160, 124, 90, 54, 18], 1), 395, "FIG. 5.—The H-6 brake valve from above; handle in Running position."),
         ("pos", [
             ("Release", "Main reservoir air straight into the pipe, to release a long train. It hisses as a warning: come back within a few seconds."),
@@ -405,7 +405,8 @@ CHAPTERS = [
         ("p", "The settings are in Unity Mod Manager's window, Ctrl+F10."),
         ("pos", [
             ("Realistic brake", "Off gives the game's own brake back at once, from the pressures this one left."),
-            ("Equipment", "European or American. American gives the steam engines and DM3 the E-T, the H-6 and S-6. Changing it re-reads every car."),
+            ("Equipment", "European or American, for the cars and engines not known. Changing it re-reads every car."),
+            ("Every engine", "Every engine uses the setting, not its own. Off by default."),
             ("Load braking", "American cars: Period, no empty/load valve, or EmptyLoad, automatic."),
             ("Force from car", "Loaded and empty cars stop differently."),
             ("G/P lever", "The freight cars' mode as they come into service."),

@@ -28,4 +28,33 @@ public class FreshCutTests
         Assert.False(FreshCut.Frees(driven: false, handBrake: 1.0));
         Assert.False(FreshCut.Frees(driven: true, handBrake: 0.5));
     }
+
+    [Fact]
+    public void ACutIsWeighedOnceItsCouplingsHaveFormed()
+    {
+        Assert.Equal(FreshCut.Step.Wait, FreshCut.Next(age: 1, standing: true, driven: false));
+        Assert.Equal(FreshCut.Step.Weigh, FreshCut.Next(age: 3.1, standing: true, driven: false));
+    }
+
+    [Fact]
+    public void ACutStillMovingAtItsCheckIsWatchedUntilItStands()
+    {
+        // The in-game check of 2026-11-03: a parked cut still settling at 3 s was never secured.
+        Assert.Equal(FreshCut.Step.Wait, FreshCut.Next(age: 3.1, standing: false, driven: false));
+        Assert.Equal(FreshCut.Step.Wait, FreshCut.Next(age: 20, standing: false, driven: false));
+        Assert.Equal(FreshCut.Step.Weigh, FreshCut.Next(age: 20, standing: true, driven: false));
+    }
+
+    [Fact]
+    public void ACutStillMovingAfterHalfAMinuteIsLetGo()
+    {
+        Assert.Equal(FreshCut.Step.Drop, FreshCut.Next(age: 30, standing: false, driven: false));
+    }
+
+    [Fact]
+    public void ACutADriverRunsIsLetGoAtOnce()
+    {
+        Assert.Equal(FreshCut.Step.Drop, FreshCut.Next(age: 0.5, standing: true, driven: true));
+        Assert.Equal(FreshCut.Step.Drop, FreshCut.Next(age: 10, standing: false, driven: true));
+    }
 }

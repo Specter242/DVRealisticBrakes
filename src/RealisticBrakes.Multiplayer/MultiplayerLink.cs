@@ -390,6 +390,7 @@ namespace RealisticBrakes.Sim
             // After the cars, so an older guest reads what it knows and stops.
             writer.Write((byte)Settings.LoadBraking);
             writer.Write(Settings.DirectAdmission);
+            writer.Write(Settings.EveryEngineUsesSetting);
         }
 
         public void Deserialize(BinaryReader reader)
@@ -407,6 +408,8 @@ namespace RealisticBrakes.Sim
                 LoadBraking = LoadBraking.EmptyLoad,
                 // Nor vacuum equipment, whose DA valves are on by default.
                 DirectAdmission = true,
+                // Nor engines' own standards: every engine used the setting.
+                EveryEngineUsesSetting = true,
             };
             Sequence = reader.ReadUInt32();
             States.Clear();
@@ -427,6 +430,8 @@ namespace RealisticBrakes.Sim
                 Settings.LoadBraking = (LoadBraking)reader.ReadByte();
             if (!reader.BaseStream.CanSeek || reader.BaseStream.Position < reader.BaseStream.Length)
                 Settings.DirectAdmission = reader.ReadBoolean();
+            if (!reader.BaseStream.CanSeek || reader.BaseStream.Position < reader.BaseStream.Length)
+                Settings.EveryEngineUsesSetting = reader.ReadBoolean();
         }
     }
 }

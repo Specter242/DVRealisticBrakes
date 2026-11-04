@@ -32,7 +32,7 @@ namespace RealisticBrakes.Controls
         public static bool IsS6(TrainCar car)
         {
             var system = car != null ? car.brakeSystem : null;
-            return system != null && Main.Settings.Equipment == Equipment.American && system.hasTrainBrake && !system.selfLappingController
+            return system != null && Sim.CarAir.IsAmericanEngine(car) && system.hasTrainBrake && !system.selfLappingController
                 && system.hasIndependentBrake;
         }
 

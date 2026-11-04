@@ -21,11 +21,10 @@ namespace RealisticBrakes.Sim
         // A car whose brakes give less than this target factor is unbraked here.
         private const float Braked = 0.01f;
 
-        // A spawned or loaded car's cut is weighed this long after, s, once its couplings have formed.
-        private const float SecureAfter = 3f;
-
         private readonly Dictionary<TrainCar, float> fresh = new Dictionary<TrainCar, float>();
         private readonly List<TrainCar> due = new List<TrainCar>();
+        // Each cut with a fresh car, and when its newest fresh car appeared.
+        private readonly Dictionary<Trainset, float> newest = new Dictionary<Trainset, float>();
         private readonly List<HeldCar> held = new List<HeldCar>();
         private readonly HashSet<TrainCar> scaled = new HashSet<TrainCar>();
         private readonly HashSet<TrainCar> scaledNow = new HashSet<TrainCar>();
@@ -275,30 +274,48 @@ namespace RealisticBrakes.Sim
                 SetFactor(brakes, brakes.unaffectedTargetBrakingFactor * brakes.heatController.overheatReductionFactor);
         }
 
-        // A cut the game spawned or loaded, weighed once its couplings have formed: if its brakes can't hold it, its hand brakes go on.
+        // A cut the game spawned or loaded, weighed once its couplings have formed and it stands (FreshCut.Next): if its
+        // brakes can't hold it, its hand brakes go on. Until then it stays fresh, frozen whenever it stands (Hold).
         private void SecureFresh()
         {
             if (fresh.Count == 0 || Net.IsGuest)
                 return;
             due.Clear();
+            newest.Clear();
             foreach (var pair in fresh)
-                if (pair.Key == null || Time.time - pair.Value > SecureAfter)
+            {
+                var set = pair.Key != null ? pair.Key.trainset : null;
+                if (set == null)
+                {
                     due.Add(pair.Key);
-            if (due.Count == 0)
-                return;
-            var sets = new HashSet<Trainset>();
-            foreach (var car in due)
-            {
-                fresh.Remove(car);
-                if (car != null && car.trainset != null)
-                    sets.Add(car.trainset);
+                    continue;
+                }
+                if (!newest.TryGetValue(set, out var at) || pair.Value > at)
+                    newest[set] = pair.Value;
             }
-            foreach (var set in sets)
+            foreach (var car in due)
+                fresh.Remove(car);
+            foreach (var entry in newest)
             {
-                // Weighed last: it works out every car's force.
+                var set = entry.Key;
+                var age = Time.time - entry.Value;
+                if (age < FreshCut.WeighAfter)
+                    continue;
                 var standing = Standing(set);
-                var driven = standing && BrakeSets.AiDriven(set);
-                if (!FreshCut.Secures(standing, driven, standing && !driven && Weigh(set)))
+                var driven = BrakeSets.AiDriven(set);
+                var step = FreshCut.Next(age, standing, driven);
+                if (step == FreshCut.Step.Wait)
+                    continue;
+                foreach (var car in set.cars)
+                    fresh.Remove(car);
+                if (step == FreshCut.Step.Drop)
+                {
+                    if (!driven)
+                        Main.Mod?.Logger.Log($"A new cut of {set.cars.Count} cars was still moving {FreshCut.GiveUpAfter:F0} s after it appeared, so it's left as it is (from {set.firstCar?.ID})");
+                    continue;
+                }
+                // Weighed last: it works out every car's force.
+                if (!FreshCut.Secures(standing, driven, Weigh(set)))
                     continue;
                 var set_ = 0;
                 foreach (var car in set.cars)

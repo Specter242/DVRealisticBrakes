@@ -30,11 +30,14 @@ namespace RealisticBrakes
         [Draw("Run the realistic brake (off: the game's own brake runs, from the pressures this one left)")]
         public bool Enabled = true;
 
-        [Draw("Brake equipment, for the cars and the steam engines and DM3: European (UIC distributors, graduated release, G/P; the engines keep a self-lapping independent) or American (AB valves, direct release, retainers, emergency reservoirs; the engines get the E-T, its H-6 brake valve and S-6 independent). Changing it re-reads every car", DrawType.ToggleGroup)]
+        [Draw("Brake equipment for the cars, and for the engines whose own isn't known (or every engine, with the box below): European (UIC distributors, graduated release, G/P; the engines keep a self-lapping independent) or American (AB valves, direct release, retainers, emergency reservoirs; the steam engines and DM3 get the E-T, its H-6 brake valve and S-6 independent, the diesels the 26-L). Changing it re-reads every car", DrawType.ToggleGroup)]
         public Equipment Equipment = Equipment.European;
 
         // Synced in multiplayer whatever the build, so the session's packets read alike.
         public bool DirectAdmission = true;
+
+        [Draw("Every engine uses the brake equipment above. Off, each engine has its own prototype's: the S282, S060, and the American custom engines American, the stock diesels and the BR95 European, the rest the setting. The cars always use the setting")]
+        public bool EveryEngineUsesSetting;
 
         [Draw("Freight cars brake with their own force, not their load's: a loaded car stops slower than an empty one, and each car's empty/loaded valve, set from its load, matters")]
         public bool BrakeForceFromCar = true;
@@ -87,11 +90,13 @@ namespace RealisticBrakes
         }
 
         private Equipment drawnEquipment = Equipment.European;
+        private bool drawnEveryEngine;
 
         /// <summary>Notes the equipment as loaded, so only a change of it re-reads the cars.</summary>
         public void AcceptLoaded()
         {
             drawnEquipment = Equipment;
+            drawnEveryEngine = EveryEngineUsesSetting;
             drawnLevers = (Enabled, Equipment, ManualEmptyLoaded, BrakeForceFromCar);
         }
 
@@ -100,9 +105,10 @@ namespace RealisticBrakes
 
         public void OnChange()
         {
-            if (Equipment != drawnEquipment)
+            if (Equipment != drawnEquipment || EveryEngineUsesSetting != drawnEveryEngine)
             {
                 drawnEquipment = Equipment;
+                drawnEveryEngine = EveryEngineUsesSetting;
                 Sim.BrakeSets.Invalidate();
             }
             var levers = (Enabled, Equipment, ManualEmptyLoaded, BrakeForceFromCar);

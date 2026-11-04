@@ -112,13 +112,15 @@ namespace RealisticBrakes.Sim
             var american = Main.Settings.Equipment == Equipment.American;
             if (system.hasCompressor)
             {
-                // American manual-lap engines (the steam engines and the DM3) have the E-T equipment: the H-6 automatic and the
-                // No. 6 distributing valve. The self-lapping diesels have the 26-L.
-                var et = american && system.hasTrainBrake && !system.selfLappingController;
-                var spec = et ? LocomotiveBrakeSpec.EtSteam() : american ? LocomotiveBrakeSpec.American() : new LocomotiveBrakeSpec();
+                // An engine carries its own prototype's standard (EngineStandards; the cars keep the setting). American
+                // manual-lap engines (the steam engines and the DM3) have the E-T equipment: the H-6 automatic and the No. 6
+                // distributing valve. The self-lapping diesels have the 26-L.
+                var americanEngine = IsAmericanEngine(car);
+                var et = americanEngine && system.hasTrainBrake && !system.selfLappingController;
+                var spec = et ? LocomotiveBrakeSpec.EtSteam() : americanEngine ? LocomotiveBrakeSpec.American() : new LocomotiveBrakeSpec();
                 if (system.mainResVolume > 0)
                     spec.MainReservoirVolume = system.mainResVolume / 1000.0;
-                var valveSpec = et ? DriverBrakeValveSpec.H6() : american ? DriverBrakeValveSpec.American() : DriverBrakeValveSpec.Uic();
+                var valveSpec = et ? DriverBrakeValveSpec.H6() : americanEngine ? DriverBrakeValveSpec.American() : DriverBrakeValveSpec.Uic();
                 var engine = new LocomotiveBrake(spec, system.hasTrainBrake ? new DriverBrakeValve(valveSpec) : null);
                 brake = new CarBrake(length, geometry, locomotive: engine);
                 engine.MainReservoir.Pressure = Pa(MainReservoirUnsmoothed(system));
@@ -154,6 +156,14 @@ namespace RealisticBrakes.Sim
             return new CarAir(system, car, brake, generation, RiggingFor(car), vacuum: false);
         }
 
+
+ internal static bool IsAmericanEngine(TrainCar car)
+        {
+            var settings = Main.Settings;
+            var setting = settings.Equipment == Equipment.American ? AirStandard.American : AirStandard.European;
+            var livery = car != null ? car.carLivery : null;
+            return EngineStandards.For(settings.EveryEngineUsesSetting, setting, livery?.id, livery?.parentType?.id) == AirStandard.American;
+        }
 
         // Each car type's heaviest cargo, kg, once worked out.
         private static readonly Dictionary<TrainCarType_v2, float> heaviestCargo = new Dictionary<TrainCarType_v2, float>();

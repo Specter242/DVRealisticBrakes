@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 (2026-11-04)
+
+- **Each engine has its own prototype's brake equipment.** The S282,
+  S060, and the American custom engines are American, with the H-6 and
+  S-6 on the steam engines and the 26-L on the diesels. The stock diesels
+  and the BR95 are European. The cars keep the brake equipment setting,
+  and any engine's brake valve works any car. To have every engine use
+  the setting, as before, tick "Every engine uses the brake equipment
+  above".
+- A new cut still settling when it was checked, three seconds after it
+  appeared, is now held and gets its hand brakes once it stands, instead
+  of being left unsecured to roll on a grade.
+
 ## 1.2.5 (2026-11-03)
 
 - Trains the AI Traffic mod spawns and drives no longer get every hand

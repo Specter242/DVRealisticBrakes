@@ -241,6 +241,7 @@ namespace RealisticBrakes.Sim
             public bool WidenTrainBrakeHandles;
             public LoadBraking LoadBraking;
             public bool DirectAdmission;
+            public bool EveryEngineUsesSetting;
 
             public static ModelSettings From(Settings s) => new ModelSettings
             {
@@ -252,6 +253,7 @@ namespace RealisticBrakes.Sim
                 WidenTrainBrakeHandles = s.WidenTrainBrakeHandles,
                 LoadBraking = s.LoadBraking,
                 DirectAdmission = s.DirectAdmission,
+                EveryEngineUsesSetting = s.EveryEngineUsesSetting,
             };
 
             public void To(Settings s)
@@ -264,12 +266,13 @@ namespace RealisticBrakes.Sim
                 s.WidenTrainBrakeHandles = WidenTrainBrakeHandles;
                 s.LoadBraking = LoadBraking;
                 s.DirectAdmission = DirectAdmission;
+                s.EveryEngineUsesSetting = EveryEngineUsesSetting;
             }
 
             public bool SameAs(ModelSettings o) =>
                 Enabled == o.Enabled && Equipment == o.Equipment && BrakeForceFromCar == o.BrakeForceFromCar && FreightMode == o.FreightMode
                 && ManualEmptyLoaded == o.ManualEmptyLoaded && WidenTrainBrakeHandles == o.WidenTrainBrakeHandles && LoadBraking == o.LoadBraking
-                && DirectAdmission == o.DirectAdmission;
+                && DirectAdmission == o.DirectAdmission && EveryEngineUsesSetting == o.EveryEngineUsesSetting;
         }
 
         /// <summary>This player's own model settings while a host's are in use; null otherwise.</summary>
@@ -285,9 +288,10 @@ namespace RealisticBrakes.Sim
             if (OwnSettings == null)
                 OwnSettings = mine;
             var equipment = settings.Equipment;
+            var everyEngine = settings.EveryEngineUsesSetting;
             host.To(settings);
             settings.AcceptLoaded();
-            if (equipment != settings.Equipment)
+            if (equipment != settings.Equipment || everyEngine != settings.EveryEngineUsesSetting)
                 BrakeSets.Invalidate();
             // The cars' lever rows for the host's equipment and empty/loaded setting.
             CarLevers.RefitAll();
@@ -305,10 +309,11 @@ namespace RealisticBrakes.Sim
             if (settings == null || OwnSettings == null)
                 return;
             var equipment = settings.Equipment;
+            var everyEngine = settings.EveryEngineUsesSetting;
             OwnSettings.Value.To(settings);
             OwnSettings = null;
             settings.AcceptLoaded();
-            if (equipment != settings.Equipment)
+            if (equipment != settings.Equipment || everyEngine != settings.EveryEngineUsesSetting)
                 BrakeSets.Invalidate();
             CarLevers.RefitAll();
         }

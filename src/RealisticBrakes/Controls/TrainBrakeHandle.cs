@@ -226,7 +226,7 @@ namespace RealisticBrakes.Controls
                 return;
             // The American 26-L has no filling stroke (DriverBrakeValveSpec.FillingStroke), and the H-6 has holding; the
             // equipment is read as the cab loads.
-            var american = Main.Settings.Equipment == Equipment.American;
+            var american = Sim.CarAir.IsAmericanEngine(car);
             var layout = system.selfLappingController
                 ? WidenedHandle.SelfLapping(spec.notches, fillingStroke: !american)
                 : WidenedHandle.ManualLap(spec.notches, holding: american);

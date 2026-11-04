@@ -248,6 +248,9 @@ namespace RealisticBrakes.AdapterCheck
             Check(!settings.ShowOverlay && !settings.ManualEmptyLoaded && settings.ShowValveText
                   && !manual.GetCustomAttributes(true).Any(a => a.GetType().Name == "DrawAttribute"),
                 "a new install starts with the pressure overlay off, the brake controls' text on, and the empty/loaded lever automatic, its by-hand switch not in the menu");
+            var every = typeof(Settings).GetField(nameof(Settings.EveryEngineUsesSetting)).GetCustomAttributes(true).OfType<UnityModManagerNet.DrawAttribute>().SingleOrDefault();
+            Check(!settings.EveryEngineUsesSetting && every != null,
+                "each engine starts on its own prototype's brake equipment, the override in the menu and off");
             var draw = typeof(Settings).GetField(nameof(Settings.LoadBraking)).GetCustomAttributes(true).OfType<UnityModManagerNet.DrawAttribute>().SingleOrDefault();
             Check(settings.LoadBraking == LoadBraking.Period && draw != null && draw.VisibleOn == "Equipment|American",
                 "American cars' load braking starts at Period, in the menu only with American equipment");
