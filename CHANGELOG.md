@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 (2026-11-05)
+
+- Brakes no longer overheat and fade within a minute on a long downhill.
+  Loaded American cars brake with their empty weight's force, so they
+  needed a much harder application, and the game heated them by how hard
+  they were applied rather than by the force they made. Now heat follows
+  the force, so a grade heats the brakes as much as in the stock game.
+
 ## 1.3.0 (2026-11-04)
 
 - **Each engine has its own prototype's brake equipment.** The S282,

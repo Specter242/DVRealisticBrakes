@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.3.0"
+EDITION = "1.3.1"
 
 LEFT, RIGHT = 110, W - 144
 

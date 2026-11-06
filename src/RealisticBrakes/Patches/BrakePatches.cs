@@ -106,6 +106,31 @@ namespace RealisticBrakes.Patches
         }
     }
 
+ [HarmonyPatch(typeof(BrakeSystem), "SimulateBrakingForce")]
+    internal static class BrakeHeatPatch
+    {
+        // The car whose braking force the game is working out, while it does: its heat step is called from there.
+        [ThreadStatic] internal static BrakeSystem Current;
+
+        private static void Prefix(BrakeSystem __instance) => Current = __instance;
+
+        private static void Finalizer() => Current = null;
+    }
+
+    /// <summary>The heat step of <see cref="BrakeHeatPatch"/>'s car reads its braking factor scaled to its force.</summary>
+    [HarmonyPatch(typeof(BrakeSystem.HeatController), nameof(BrakeSystem.HeatController.UpdateTemperature))]
+    internal static class BrakeHeatStepPatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix(BrakeSystem.HeatController __instance, ref float brakingFactor)
+        {
+            var system = BrakeHeatPatch.Current;
+            if (system == null || system.heatController != __instance || !BrakeSets.Handles(system) || !BrakeSets.TryGet(system, out var air))
+                return;
+            brakingFactor *= air.HeatShare;
+        }
+    }
+
     /// <summary>
     /// Values the game or another mod sets directly (a save restored, the
     /// startup helper, Leak Down's main reservoir leak, the console) go into

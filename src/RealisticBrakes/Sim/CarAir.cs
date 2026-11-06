@@ -195,6 +195,17 @@ namespace RealisticBrakes.Sim
         /// <summary>The freight car's force per kg as its rigging set it this frame, before the hold's scaling (<see cref="HandBrakeHold"/>).</summary>
         public float RiggedPerKg { get; private set; }
 
+ public float HeatShare
+        {
+            get
+            {
+                if (Car == null || Car.Bogies == null || Car.Bogies.Length == 0 || Car.Bogies[0] == null)
+                    return 1f;
+                var stockPerKg = Car.carLivery.parentType.brakes.MaxBrakingForcePerBogie * StockForcePerKg;
+                return stockPerKg > 0f ? Car.Bogies[0].maxBrakingForcePerKg / stockPerKg : 1f;
+            }
+        }
+
  private bool ApplyRigging()
         {
             var valve = Brake.Valve;
