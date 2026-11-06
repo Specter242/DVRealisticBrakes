@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2 (2026-11-06)
+
+- Fixed: on American equipment, the S282's own bleed valve now lets the
+  engine's brakes off while the train's stay applied.
+- Fixed: with European cars behind a steam engine on American equipment
+  (the S282 by default), recharging in release left the front cars
+  dragging once the handle went back to running, until each was bled.
+
 ## 1.3.1 (2026-11-05)
 
 - Brakes no longer overheat and fade within a minute on a long downhill.

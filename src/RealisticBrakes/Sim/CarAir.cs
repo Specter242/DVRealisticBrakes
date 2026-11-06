@@ -301,7 +301,7 @@ namespace RealisticBrakes.Sim
             if (bs.controlReservoirPressureReleased)
             {
                 Brake.Valve?.PullRelease();
-                engine?.Distributor.PullRelease();
+                engine?.PullRelease();
                 bs.controlReservoirPressureReleased = false;
                 changed = true;
             }

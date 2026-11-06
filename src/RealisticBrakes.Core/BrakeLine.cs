@@ -89,6 +89,7 @@ namespace RealisticBrakes.Core
                 dt = steps * substep;
             }
             var h = dt / steps;
+            SetControlReservoirCeiling();
             for (var i = 0; i < chambers.Length; i++)
                 before[i] = chambers[i].Pressure;
             for (var s = 0; s < steps; s++)
@@ -102,6 +103,27 @@ namespace RealisticBrakes.Core
             for (var i = 0; i < chambers.Length; i++)
                 fastest = Math.Max(fastest, Math.Abs(chambers[i].Pressure - before[i]));
             ChangeRate = fastest / dt;
+        }
+
+ private void SetControlReservoirCeiling()
+        {
+            var ceiling = double.NaN;
+            foreach (var car in cars)
+            {
+                var valve = car.Locomotive?.DriverValve;
+                if (valve != null && valve.CutIn)
+                {
+                    var holds = valve.Spec.Running + valve.Spec.Overcharge;
+                    ceiling = double.IsNaN(ceiling) ? holds : Math.Max(ceiling, holds);
+                }
+            }
+            foreach (var car in cars)
+            {
+                if (car.Distributor != null)
+                    car.Distributor.ControlReservoirCeiling = ceiling;
+                if (car.Locomotive != null)
+                    car.Locomotive.Distributor.ControlReservoirCeiling = ceiling;
+            }
         }
 
         private void ShareMainReservoirs(double dt)

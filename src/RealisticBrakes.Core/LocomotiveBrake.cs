@@ -239,6 +239,25 @@ namespace RealisticBrakes.Core
         private double StandingAutomatic => spec.HoldsAutomaticBrake ? HeldAutomatic : Math.Max(Distributor.Applied ? Distributor.TargetCylinder : 0, Pilot);
 
         /// <summary>
+        /// The engine's own bleed valve, pulled (the game's brake cylinder
+        /// release on the engine; tiserth, 2026-11-06): the engine lets go of
+        /// the automatic application and the train stays applied, as a car's
+        /// bleed lets that car go. Its distributor's release valve vents the
+        /// control reservoir until it releases, as on a car. On the E-T, whose
+        /// No. 6 distributing valve holds the application in its application
+        /// chamber until the automatic handle is in running, a pull lets that
+        /// out too, as a bail-off does, leaving the independent's own: before,
+        /// the pull did nothing for an E-T engine. A further reduction applies
+        /// it again by that much, and a release clears it.
+        /// </summary>
+        public void PullRelease()
+        {
+            Distributor.PullRelease();
+            if (spec.HoldsAutomaticBrake)
+                BailedOff = Math.Max(BailedOff, HeldAutomatic);
+        }
+
+        /// <summary>
         /// Bails off the independent (Realistic Firing's rules, its design
         /// "Bailing off", 2026-10-16): the engine lets go of all the automatic
         /// application then on, the train's brakes staying applied. It stays

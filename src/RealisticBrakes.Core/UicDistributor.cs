@@ -189,6 +189,12 @@ namespace RealisticBrakes.Core
 
         public Chamber ControlReservoir { get; }
 
+ public double ControlReservoirCeiling { get; set; } = double.NaN;
+
+        // The control reservoir's limit now: the distributor's own, or the line's ceiling where that is lower.
+        private double ControlLimit =>
+            double.IsNaN(ControlReservoirCeiling) ? spec.ControlReservoirLimit : Math.Min(spec.ControlReservoirLimit, ControlReservoirCeiling);
+
         public Chamber AuxiliaryReservoir { get; }
 
         public Chamber Cylinder { get; }
@@ -352,7 +358,16 @@ namespace RealisticBrakes.Core
             }
             else
             {
-                ChargeFlow += Math.Max(0, controlCharging.Pass(pipe, ControlReservoir, dt, Air.Atmosphere + spec.ControlReservoirLimit)) / dt;
+                var ceiling = Air.Atmosphere + ControlLimit;
+                ChargeFlow += Math.Max(0, controlCharging.Pass(pipe, ControlReservoir, dt, ceiling)) / dt;
+                // Held over the ceiling (charged behind a valve that holds the pipe higher), it comes down to it through the
+                // same choke while released, so a lower running pressure later doesn't apply the car.
+                if (ControlReservoir.Pressure > ceiling)
+                {
+                    var relieved = Math.Min(controlCharging.Conductance * (ControlReservoir.Pressure - ceiling) * dt, -ControlReservoir.MassToReach(ceiling));
+                    ControlReservoir.Mass -= relieved;
+                    exhausted += relieved;
+                }
                 TargetCylinder = 0;
                 exhausted += SetCylinder(Air.Atmosphere, dt);
                 exhausted += spec.QuickService.Vent(QuickServiceChamber, dt);
