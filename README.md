@@ -35,3 +35,37 @@ DV_INSTALL_DIR="/path/to/Derail Valley" scripts/package.sh
 
 The package is written to `dist/RealisticBrakes-<version>.zip`. Extract its
 `RealisticBrakes` folder into the game's `Mods` directory.
+
+## For other mods
+
+`RealisticBrakes.Api` ([`src/RealisticBrakes/Api.cs`](src/RealisticBrakes/Api.cs))
+is a small public API. Call it by reflection, so your mod runs with or
+without this one:
+
+```csharp
+var api = UnityModManager.FindMod("RealisticBrakes")?.Assembly?.GetType("RealisticBrakes.Api");
+var active = api != null && (bool)api.GetProperty("Active").GetValue(null);
+var bailed = active ? (float)api.GetMethod("BailOff").Invoke(null, new object[] { car }) : 0f;
+```
+
+- `bool Active`: whether this mod is running the brake now. When it isn't,
+  the game's own brake runs.
+- `float BailOff(TrainCar car)`: bails off an engine, as a click on its
+  independent brake lever does. The engine lets go of the train brake's
+  application then on, while the train's brakes stay applied, until the
+  next release. It returns the cylinder pressure let off, in gauge bar,
+  and 0 when there was nothing to bail or the car isn't an engine.
+
+Reading pressures needs no API. While this mod runs the brake, it writes
+each car's own `BrakeSystem` fields every frame, in the game's absolute bar
+(1.0 is atmospheric):
+
+- `brakePipePressure`: that car's own section of the brake pipe, where the
+  game has one pressure for the whole train;
+- `auxReservoirPressure`;
+- `controlReservoirPressure` (American cars have none, so it reads their
+  auxiliary reservoir);
+- `brakeCylinderPressure`, through the game's own smoothing;
+- `mainReservoirPressure` on engines.
+
+If you need something it doesn't expose, open an issue.

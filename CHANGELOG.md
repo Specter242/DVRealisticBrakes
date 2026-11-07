@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.3 (2026-11-07)
+
+- The EMD GP7 and the ALCo RS-11s now have American equipment, the 26-L.
+- Works with the Caboose Brake Handle mod: its handle brakes the caboose
+  from the caboose's own air, as it does without this mod.
+- Fixed: on engines with a cab at each end, such as the Class DCB and the
+  Class 750, both cabs' brake handles get the added notches, bail-off,
+  and the text by the crosshair, not just one.
+
 ## 1.3.2 (2026-11-06)
 
 - Fixed: on American equipment, the S282's own bleed valve now lets the

@@ -16,6 +16,9 @@ public class EngineStandardsTests
     [InlineData("Jk3A", AirStandard.American)]
     [InlineData("S2102-870", AirStandard.American)]
     [InlineData("S2102-720", AirStandard.European)]
+    [InlineData("EMD-GP7", AirStandard.American)]
+    [InlineData("DE4-750", AirStandard.American)]
+    [InlineData("DE4-751", AirStandard.American)]
     public void AnEngineHasItsPrototypesStandard(string id, AirStandard expected)
     {
         Assert.Equal(expected, EngineStandards.Known(id, null));

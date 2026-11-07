@@ -357,6 +357,9 @@ namespace RealisticBrakes.Core
         /// <summary>The bleed rod held (a long pull): the auxiliary and emergency reservoirs drain too, taking the car off air.</summary>
         public bool ReleaseHeld { get; set; }
 
+        /// <inheritdoc/>
+        public double IndependentCylinder { get; set; }
+
         /// <summary>Restores the brake cylinder release valve's latch, as saved.</summary>
         public void RestoreCylinderRelease(bool open) => CylinderReleaseOpen = open && Applied;
 
@@ -458,13 +461,15 @@ namespace RealisticBrakes.Core
                         FillFlow += moved / dt;
                     }
                 }
+                FillFlow += Independent(dt);
             }
             else
             {
                 // Near the engine, the pipe stands well over the reservoir: a retarded release, and a slow recharge. Further
                 // back the pipe rises no faster than the reservoir charges, and the car releases in full.
                 Retarded = spec.RetardedRelease && pipe.Pressure - AuxiliaryReservoir.Pressure > spec.RetardThreshold;
-                exhausted += Exhaust(dt, Retarded);
+                FillFlow += Independent(dt);
+                exhausted += Exhaust(dt, Retarded, Air.Atmosphere + Math.Max(0, IndependentCylinder));
                 var charging = Retarded ? dt * spec.RetardedChargeShare : dt;
                 var charged = spec.AuxiliaryCharging.PassOneWay(pipe, AuxiliaryReservoir, charging);
                 charged += auxiliaryBackflow.Pass(pipe, AuxiliaryReservoir, charging);
@@ -491,20 +496,29 @@ namespace RealisticBrakes.Core
         /// retainer vents through its own small port down to its pressure.
         /// Returns the air let out, kg.
         /// </summary>
-        private double Exhaust(double dt, bool retarded)
+        private double Exhaust(double dt, bool retarded, double floor)
         {
             var port = retarded ? spec.RetardedReleasePort : spec.ReleasePort;
             switch (Retainer)
             {
                 case Retainer.HighPressure:
-                    return Smaller(port, spec.RetainerVent).Vent(Cylinder, dt, Air.Atmosphere + spec.HighRetained);
+                    return Smaller(port, spec.RetainerVent).Vent(Cylinder, dt, Math.Max(floor, Air.Atmosphere + spec.HighRetained));
                 case Retainer.LowPressure:
-                    return Smaller(port, spec.RetainerVent).Vent(Cylinder, dt, Air.Atmosphere + spec.LowRetained);
+                    return Smaller(port, spec.RetainerVent).Vent(Cylinder, dt, Math.Max(floor, Air.Atmosphere + spec.LowRetained));
                 case Retainer.SlowDirect:
-                    return Smaller(port, spec.SlowDirectPort).Vent(Cylinder, dt);
+                    return Smaller(port, spec.SlowDirectPort).Vent(Cylinder, dt, floor);
                 default:
-                    return port.Vent(Cylinder, dt);
+                    return port.Vent(Cylinder, dt, floor);
             }
+        }
+
+        // Another mod's independent on the car (ICarValve.IndependentCylinder): the auxiliary reservoir fills the cylinder up to
+        // it through the service port. Returns the air moved, kg/s.
+        private double Independent(double dt)
+        {
+            if (!(IndependentCylinder > 0) || CylinderReleaseOpen)
+                return 0;
+            return spec.ServicePort.PassOneWay(AuxiliaryReservoir, Cylinder, dt, Air.Atmosphere + IndependentCylinder) / dt;
         }
 
         private static Orifice Smaller(Orifice a, Orifice b) => a.EffectiveArea <= b.EffectiveArea ? a : b;

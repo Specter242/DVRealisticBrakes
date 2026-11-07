@@ -2,6 +2,11 @@
   "Releases": [
     {
       "Id": "RealisticBrakes",
+      "Version": "1.3.3",
+      "DownloadUrl": "https://github.com/Specter242/DVRealisticBrakes/releases/download/v1.3.3/RealisticBrakes-1.3.3.zip"
+    },
+    {
+      "Id": "RealisticBrakes",
       "Version": "1.3.2",
       "DownloadUrl": "https://github.com/Specter242/DVRealisticBrakes/releases/download/v1.3.2/RealisticBrakes-1.3.2.zip"
     },

@@ -24,10 +24,13 @@ namespace RealisticBrakes.Patches
     {
         private static void Postfix(InteriorControlsManager __instance)
         {
+            // Every cab's handles: an engine with a cab at each end has a pair on each port (CabHandles).
+            var independents = CabHandles.Of(__instance, InteriorControlsManager.ControlType.IndBrake);
+            var trainBrakes = CabHandles.Of(__instance, InteriorControlsManager.ControlType.TrainBrake);
             Try("the bail-off click", () =>
             {
-                if (__instance.TryGetControl(InteriorControlsManager.ControlType.IndBrake, out var lever) && lever.controlImplBase != null)
-                    IndependentBailClick.Attach(lever.controlImplBase, __instance.Car);
+                foreach (var lever in independents)
+                    IndependentBailClick.Attach(lever, __instance.Car);
             });
             // Shown only while the model runs, so fitted either way.
             Try("brake valve text", () => CabValveHover.Attach(__instance, __instance.Car));
@@ -35,16 +38,16 @@ namespace RealisticBrakes.Patches
                 return;
             Try("the S-6 independent", () =>
             {
-                if (__instance.TryGetControl(InteriorControlsManager.ControlType.IndBrake, out var lever) && lever.controlImplBase != null)
-                    IndependentHandle.Fit(lever.controlImplBase, __instance.Car);
+                foreach (var lever in independents)
+                    IndependentHandle.Fit(lever, __instance.Car);
             });
             // A handle widened without both of its value patches would read the new notches as stock values.
             Try("the train brake handle", () =>
             {
                 if (Main.Settings.WidenTrainBrakeHandles
-                    && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleNotchPatch)) && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleSetPatch))
-                    && __instance.TryGetControl(InteriorControlsManager.ControlType.TrainBrake, out var handle) && handle.controlImplBase != null)
-                    TrainBrakeHandle.Widen(handle.controlImplBase, __instance.Car);
+                    && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleNotchPatch)) && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleSetPatch)))
+                    foreach (var handle in trainBrakes)
+                        TrainBrakeHandle.Widen(handle, __instance.Car);
             });
             Try("the equalizing reservoir's hand", () =>
             {

@@ -56,6 +56,8 @@ namespace RealisticBrakes.Core
         /// <summary>The release valve held open (a long pull): it drains the car's reservoirs too, taking it off air.</summary>
         bool ReleaseHeld { get; set; }
 
+ double IndependentCylinder { get; set; }
+
         /// <summary>Advances the valve <paramref name="dt"/> s against its car's section of <paramref name="pipe"/>.</summary>
         void Step(Chamber pipe, double dt);
     }

@@ -161,8 +161,8 @@ while they recharge.
 
 Each engine carries its own prototype's equipment. The **S282**, **S060**,
 and the American custom engines (the FEF-3, the Union Pacific 4-8-4s, the
-2901, the Hudson, the C-16, the EMC E-series, the FPD-4, the JK3, and the
-QJ) are **American**. The steam engines among them get the E-T, the H-6
+2901, the Hudson, the C-16, the EMC E-series, the FPD-4, the GP7, the
+RS-11s, the JK3, and the QJ) are **American**. The steam engines among them get the E-T, the H-6
 brake valve with holding and the S-6 independent, and the diesels the 26-L.
 The stock diesels and the BR95 are **European**.
 
@@ -262,6 +262,8 @@ page, or a tab down its edge, to turn to that chapter.
 ## Compatibility
 
 - **Leak Down:** works.
+- **Caboose Brake Handle:** works. Its handle brakes the caboose from the
+  caboose's own air.
 - **Realistic Firing:** use 1.16.2 or newer, which leaves bailing off to
   this mod; older versions also act on the click to bail off. Its air
   pumps work.

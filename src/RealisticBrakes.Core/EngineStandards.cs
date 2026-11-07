@@ -30,6 +30,9 @@ namespace RealisticBrakes.Core
             ["DE4-740"] = AirStandard.American,
             ["DE4-740B"] = AirStandard.American,
             ["FPD-4"] = AirStandard.American,
+            ["EMD-GP7"] = AirStandard.American,
+            ["DE4-750"] = AirStandard.American,
+            ["DE4-751"] = AirStandard.American,
             // Lilla and Cruzer's fictional 0-8-0 "for S060 equivalent work" (Nexus 1334): as the S060.
             ["Jk3A"] = AirStandard.American,
             // The QJ: China's air brake descends from Westinghouse's.

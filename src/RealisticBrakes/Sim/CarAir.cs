@@ -256,6 +256,9 @@ namespace RealisticBrakes.Sim
             forceOverridden = false;
         }
 
+        /// <summary>The game's independent over its travel, gauge Pa: 1 to 4.5 bar absolute (<c>BrakeSystem.SimulateLocoControlValve</c>).</summary>
+        internal const double CarIndependentRange = 3.5 * Air.Bar;
+
         /// <summary>The game's per-kg factor on a car type's force per bogie (<c>Bogie.Awake</c>: 1/11,500).</summary>
         internal const float StockForcePerKg = 8.695652E-05f;
 
@@ -314,6 +317,19 @@ namespace RealisticBrakes.Sim
             {
                 engine.Distributor.ReleaseHeld = ReleaseHeld;
                 changed = true;
+            }
+            // Another mod's independent on an ordinary car (Caboose Brake Handle's on the caboose, Nexus 1774): the game's
+            // independent travel, 1 to 4.5 bar absolute, fills its cylinder from its own auxiliary reservoir. Not a tender
+            // following its engine, nor an engine, whose own independent this is.
+            if (engine == null && Brake.Valve != null && bs.brakeCylinderPressureCalculation == BrakeSystem.BrakeCylinderPressureCalculation.Regular)
+            {
+                var position = Mathf.Clamp01(bs.independentBrakePosition);
+                var carIndependent = (bs.indBrakeCurve != null ? Mathf.Clamp01(bs.indBrakeCurve.Evaluate(position)) : position) * CarIndependentRange;
+                if (Math.Abs(Brake.Valve.IndependentCylinder - carIndependent) > 1)
+                {
+                    Brake.Valve.IndependentCylinder = carIndependent;
+                    changed = true;
+                }
             }
 
             var mainReservoir = engine?.MainReservoir;

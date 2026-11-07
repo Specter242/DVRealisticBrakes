@@ -8,18 +8,20 @@ namespace RealisticBrakes.Controls
 {
  internal static class CabValveHover
     {
-        /// <summary>Adds the text to <paramref name="cab"/>'s brake controls, read from <paramref name="car"/>'s engine.</summary>
+        /// <summary>Adds the text to <paramref name="cab"/>'s brake controls, every cab's (<see cref="CabHandles"/>), read from <paramref name="car"/>'s engine.</summary>
         public static void Attach(InteriorControlsManager cab, TrainCar car)
         {
-            Add(cab, InteriorControlsManager.ControlType.TrainBrake, car,
-                (air, engine) => CabValveText.TrainBrake(engine, air.System.selfLappingController));
+            foreach (var control in CabHandles.Of(cab, InteriorControlsManager.ControlType.TrainBrake))
+                Add(control, car, (air, engine) => CabValveText.TrainBrake(engine, air.System.selfLappingController));
             // The S-6 handle is fitted after this, so it's looked for as the text is drawn.
-            var independent = cab.TryGetControl(InteriorControlsManager.ControlType.IndBrake, out var lever) ? lever.controlImplBase : null;
-            Add(cab, InteriorControlsManager.ControlType.IndBrake, car,
-                (air, engine) => air.System.hasIndependentBrake
+            foreach (var control in CabHandles.Of(cab, InteriorControlsManager.ControlType.IndBrake))
+            {
+                var independent = control;
+                Add(control, car, (air, engine) => air.System.hasIndependentBrake
                     ? CabValveText.Independent(engine, Main.Settings.ClickToBailOff, HasReleaseNotch(independent)) : null);
-            Add(cab, InteriorControlsManager.ControlType.TrainBrakeCutout, car,
-                (air, engine) => CabValveText.Cutout(engine.DriverValve));
+            }
+            foreach (var control in CabHandles.Of(cab, InteriorControlsManager.ControlType.TrainBrakeCutout))
+                Add(control, car, (air, engine) => CabValveText.Cutout(engine.DriverValve));
         }
 
         private static bool HasReleaseNotch(ControlImplBase lever)
@@ -28,11 +30,11 @@ namespace RealisticBrakes.Controls
             return handle != null && handle.HasReleaseNotch;
         }
 
-        private static void Add(InteriorControlsManager cab, InteriorControlsManager.ControlType type, TrainCar car, Func<CarAir, LocomotiveBrake, string> describe)
+        private static void Add(ControlImplBase reference, TrainCar car, Func<CarAir, LocomotiveBrake, string> describe)
         {
-            if (!cab.TryGetControl(type, out var reference) || reference.controlImplBase == null)
+            if (reference == null)
                 return;
-            var control = reference.controlImplBase.gameObject;
+            var control = reference.gameObject;
             var hover = control.GetComponent<HoverText>();
             if (hover == null)
                 hover = control.AddComponent<HoverText>();

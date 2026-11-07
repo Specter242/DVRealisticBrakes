@@ -302,6 +302,9 @@ namespace RealisticBrakes.Core
         /// <summary>The release valve held open (a long pull): the auxiliary reservoir drains too, taking the car off air.</summary>
         public bool ReleaseHeld { get; set; }
 
+        /// <inheritdoc/>
+        public double IndependentCylinder { get; set; }
+
         /// <summary>Advances the valve <paramref name="dt"/> s against its car's section of <paramref name="pipe"/>.</summary>
         public void Step(Chamber pipe, double dt)
         {
@@ -353,6 +356,8 @@ namespace RealisticBrakes.Core
                 target = emergency ? spec.EmergencyCylinder : Math.Min(target, spec.MaximumCylinder);
                 if (Load == LoadSetting.Empty)
                     target *= spec.EmptyRatio;
+                // Another mod's independent on the car holds it at no less (ICarValve.IndependentCylinder).
+                target = Math.Max(target, Math.Max(0, IndependentCylinder));
                 TargetCylinder = target;
                 exhausted += SetCylinder(Air.Atmosphere + target, dt);
             }
@@ -368,8 +373,9 @@ namespace RealisticBrakes.Core
                     ControlReservoir.Mass -= relieved;
                     exhausted += relieved;
                 }
-                TargetCylinder = 0;
-                exhausted += SetCylinder(Air.Atmosphere, dt);
+                // Released, the cylinder lets go, down to another mod's independent on the car, filled from the auxiliary.
+                TargetCylinder = Math.Max(0, IndependentCylinder);
+                exhausted += SetCylinder(Air.Atmosphere + TargetCylinder, dt);
                 exhausted += spec.QuickService.Vent(QuickServiceChamber, dt);
             }
 
