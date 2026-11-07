@@ -39,33 +39,61 @@ The package is written to `dist/RealisticBrakes-<version>.zip`. Extract its
 ## For other mods
 
 `RealisticBrakes.Api` ([`src/RealisticBrakes/Api.cs`](src/RealisticBrakes/Api.cs))
-is a small public API. Call it by reflection, so your mod runs with or
-without this one:
+is the public API. Call it by reflection, so your mod runs with or without
+this one. Its names, units, and meanings stay the same from version to
+version. Everything else in this mod (`RealisticBrakes.Sim`, the model's
+classes) is internal and changes without notice, so don't read it.
 
 ```csharp
 var api = UnityModManager.FindMod("RealisticBrakes")?.Assembly?.GetType("RealisticBrakes.Api");
-var active = api != null && (bool)api.GetProperty("Active").GetValue(null);
-var bailed = active ? (float)api.GetMethod("BailOff").Invoke(null, new object[] { car }) : 0f;
+var pressure = api?.GetMethod("Pressure");
+var pipe = pressure != null ? (float)pressure.Invoke(null, new object[] { car, "BrakePipe" }) : float.NaN;
 ```
 
 - `bool Active`: whether this mod is running the brake now. When it isn't,
   the game's own brake runs.
+- `float Pressure(TrainCar car, string part)`: a part's pressure on the
+  car now, in gauge bar (0 is atmospheric). The parts, named without
+  regard to case:
+  - `BrakePipe`: the car's own section of the brake pipe (the train's
+    pipe pressure varies along it);
+  - `AuxiliaryReservoir`;
+  - `ControlReservoir`: European cars, and engines' distributors;
+  - `EmergencyReservoir`: American cars;
+  - `BrakeCylinder`;
+  - `MainReservoir` and `EqualizingReservoir`: engines.
+
+  It returns NaN where the car has no such part, for a name that isn't one
+  of these, and when this mod isn't running the car's brake.
+- `string Equipment(TrainCar car)`: `"European"` or `"American"`, what the
+  car's brake runs on now (each engine has its own prototype's, the cars
+  the setting's); null when this mod isn't running the car's brake.
+- `string BrakeMode(TrainCar car)`: the G/P mode a European car's
+  distributor runs in, `"Goods"` (slow to apply and release, for a long
+  train) or `"Passenger"` (quick); engines and coaches run in Passenger.
+  Null on American equipment, which has no changeover.
+- `bool? CutOut(TrainCar car)`: whether the car's own brake is cut out by
+  its isolating cock, the cut-out lever by its bleed handle: it runs
+  unbraked, the pipe passing through.
+- `bool? BrakeValveCutOut(TrainCar car)`: whether an engine's brake valve
+  is cut out, so its train brake handle doesn't work the train's pipe, as
+  on a trailing engine. This is apart from `CutOut`, the engine's own
+  brake. Null for a car with no brake valve.
+
+  `BrakeMode`, `CutOut`, and `BrakeValveCutOut` all return null when this
+  mod isn't running the car's brake. They only read; the levers stay the
+  player's.
 - `float BailOff(TrainCar car)`: bails off an engine, as a click on its
   independent brake lever does. The engine lets go of the train brake's
   application then on, while the train's brakes stay applied, until the
   next release. It returns the cylinder pressure let off, in gauge bar,
   and 0 when there was nothing to bail or the car isn't an engine.
 
-Reading pressures needs no API. While this mod runs the brake, it writes
-each car's own `BrakeSystem` fields every frame, in the game's absolute bar
-(1.0 is atmospheric):
+The game's own `BrakeSystem` fields carry this mod's pressures too, every
+frame, in the game's absolute bar (1.0 is atmospheric): `brakePipePressure`
+(that car's own section of pipe), `auxReservoirPressure`,
+`controlReservoirPressure` (on American cars, their auxiliary reservoir's),
+`brakeCylinderPressure` (through the game's smoothing), and
+`mainReservoirPressure` on engines.
 
-- `brakePipePressure`: that car's own section of the brake pipe, where the
-  game has one pressure for the whole train;
-- `auxReservoirPressure`;
-- `controlReservoirPressure` (American cars have none, so it reads their
-  auxiliary reservoir);
-- `brakeCylinderPressure`, through the game's own smoothing;
-- `mainReservoirPressure` on engines.
-
-If you need something it doesn't expose, open an issue.
+If you need something the API doesn't give, open an issue.

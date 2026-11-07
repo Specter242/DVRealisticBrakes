@@ -63,6 +63,24 @@ namespace RealisticBrakes.AdapterCheck
 
             var field = AccessTools.Field(typeof(BrakeSystem), "mainReservoirPressureUnsmoothed");
             Check(field != null && field.FieldType == typeof(float), "BrakeSystem.mainReservoirPressureUnsmoothed is a float field");
+
+            // The public API other mods call by reflection keeps its shape (scripts/public/README.md, "For other mods").
+            var api = typeof(RealisticBrakes.Api);
+            const BindingFlags publicStatic = BindingFlags.Public | BindingFlags.Static;
+            var apiActive = api.GetProperty("Active", publicStatic);
+            var apiBail = api.GetMethod("BailOff", publicStatic, null, new[] { typeof(TrainCar) }, null);
+            var apiPressure = api.GetMethod("Pressure", publicStatic, null, new[] { typeof(TrainCar), typeof(string) }, null);
+            var apiEquipment = api.GetMethod("Equipment", publicStatic, null, new[] { typeof(TrainCar) }, null);
+            var apiMode = api.GetMethod("BrakeMode", publicStatic, null, new[] { typeof(TrainCar) }, null);
+            var apiCutOut = api.GetMethod("CutOut", publicStatic, null, new[] { typeof(TrainCar) }, null);
+            var apiValveCutOut = api.GetMethod("BrakeValveCutOut", publicStatic, null, new[] { typeof(TrainCar) }, null);
+            Check(api.IsPublic && apiActive?.PropertyType == typeof(bool) && apiBail?.ReturnType == typeof(float)
+                  && apiPressure?.ReturnType == typeof(float) && apiEquipment?.ReturnType == typeof(string)
+                  && apiMode?.ReturnType == typeof(string) && apiCutOut?.ReturnType == typeof(bool?) && apiValveCutOut?.ReturnType == typeof(bool?)
+                  && float.IsNaN((float)apiPressure.Invoke(null, new object[] { null, "BrakePipe" })) && apiEquipment.Invoke(null, new object[] { null }) == null
+                  && apiMode.Invoke(null, new object[] { null }) == null && apiCutOut.Invoke(null, new object[] { null }) == null
+                  && apiValveCutOut.Invoke(null, new object[] { null }) == null,
+                "the public API keeps Active, BailOff, Pressure, Equipment, BrakeMode, CutOut, and BrakeValveCutOut, and gives NaN and null for no car");
             var chapters = AccessTools.Field(typeof(ChapterSelector), "allChapters");
             Check(chapters != null && chapters.FieldType == typeof(List<ChapterSelector.PageBookChapter>),
                 "a booklet's chapter selector keeps its chapters in a list, which the brake booklet sets to its thumb tabs");

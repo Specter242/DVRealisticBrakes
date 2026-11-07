@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.4 (2026-11-07)
+
+- For other mods: `RealisticBrakes.Api` now reads each car's brake pressures
+  (`Pressure`, in gauge bar), its equipment (`Equipment`), its G/P mode
+  (`BrakeMode`), and its cut-outs (`CutOut`, `BrakeValveCutOut`), with fixed
+  names and units. The GitHub readme lists them.
+
 ## 1.3.3 (2026-11-07)
 
 - The EMD GP7 and the ALCo RS-11s now have American equipment, the 26-L.

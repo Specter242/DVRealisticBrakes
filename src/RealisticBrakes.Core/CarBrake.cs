@@ -70,6 +70,61 @@ namespace RealisticBrakes.Core
         /// <summary>The car's brake cylinder pressure, gauge Pa (0 without one).</summary>
         public double CylinderGauge => Cylinder == null ? 0 : Math.Max(0, Cylinder.Pressure - Air.Atmosphere);
 
+        /// <summary>
+        /// The European distributor's G/P mode, for the public API: the car's, or on an engine its own distributor's;
+        /// null on an American (AB) car, which has no changeover, or a car with no valve.
+        /// </summary>
+        public BrakingMode? BrakingMode => Distributor?.Mode ?? (Valve == null ? Locomotive?.Distributor.Mode : null);
+
+        /// <summary>
+        /// Whether the car's own brake is cut out by its isolating cock (it runs unbraked, the pipe passing through), for
+        /// the public API; null for a car with no valve.
+        /// </summary>
+        public bool? CutOut => Valve?.Isolated ?? Locomotive?.Distributor.Isolated;
+
+        /// <summary>
+        /// Whether an engine's brake valve is cut out, so it doesn't work the train's pipe (as on a trailing engine), for
+        /// the public API; null for a car with no brake valve. Apart from <see cref="CutOut"/>: the engine's own brake.
+        /// </summary>
+        public bool? BrakeValveCutOut => Locomotive?.DriverValve == null ? (bool?)null : !Locomotive.DriverValve.CutIn;
+
+        /// <summary>
+        /// <paramref name="part"/>'s pressure now, gauge Pa, for the public API; NaN where the car has no such part (or, in a
+        /// test build, runs the vacuum brake).
+        /// </summary>
+        public double GaugePressure(BrakePart part)
+        {
+            Chamber chamber;
+            switch (part)
+            {
+                case BrakePart.BrakePipe:
+                    chamber = PipeSection;
+                    break;
+                case BrakePart.AuxiliaryReservoir:
+                    chamber = Valve?.AuxiliaryReservoir ?? Locomotive?.Distributor.AuxiliaryReservoir;
+                    break;
+                case BrakePart.ControlReservoir:
+                    chamber = Distributor?.ControlReservoir ?? (Valve == null ? Locomotive?.Distributor.ControlReservoir : null);
+                    break;
+                case BrakePart.EmergencyReservoir:
+                    chamber = ControlValve?.EmergencyReservoir;
+                    break;
+                case BrakePart.BrakeCylinder:
+                    chamber = Cylinder;
+                    break;
+                case BrakePart.MainReservoir:
+                    chamber = Locomotive?.MainReservoir;
+                    break;
+                case BrakePart.EqualizingReservoir:
+                    chamber = Locomotive?.DriverValve?.EqualizingReservoir;
+                    break;
+                default:
+                    chamber = null;
+                    break;
+            }
+            return chamber == null ? double.NaN : Math.Max(0, chamber.Pressure - Air.Atmosphere);
+        }
+
         /// <summary>Charges the car to <paramref name="pressure"/> Pa, released: found standing charged.</summary>
         public void ChargeTo(double pressure)
         {
