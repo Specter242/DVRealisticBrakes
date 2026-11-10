@@ -30,10 +30,13 @@ namespace RealisticBrakes
         public static bool Load(UnityModManager.ModEntry modEntry)
         {
             Mod = modEntry;
+            modEntry.Logger.Log($"Realistic Brakes {modEntry.Info.Version}, {Build}");
             Settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
             Settings.AcceptLoaded();
             modEntry.OnGUI = _ =>
             {
+                if (FailedPatches.Count > 0)
+                    GUILayout.Label(StandAsideWarning.Message + " The log names what failed.");
                 Settings.Draw(modEntry);
                 DrawBooklet();
             };
@@ -41,6 +44,20 @@ namespace RealisticBrakes
 
             var harmony = new Harmony(modEntry.Info.Id);
             var failed = new List<string>();
+            // The game's internal fields the model reaches through handles of its own, made as these types are first
+            // used: one gone after a game update fails like a patch, here, and not later in the middle of a frame.
+            foreach (var type in new[] { typeof(Sim.CarAir), typeof(Sim.HandBrakeHold) })
+            {
+                try
+                {
+                    System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+                }
+                catch (Exception e)
+                {
+                    failed.Add(type.FullName);
+                    modEntry.Logger.Error($"{type.FullName} can't reach the game's brake: {e.GetBaseException().GetType().Name}: {e.GetBaseException().Message}");
+                }
+            }
             foreach (var type in LoadableTypes().Where(t => t.GetCustomAttributes(typeof(HarmonyPatch), true).Length > 0))
             {
                 try
@@ -67,6 +84,11 @@ namespace RealisticBrakes
                 // Half a brake is worse than the stock one: undo ours and leave the game's.
                 harmony.UnpatchAll(modEntry.Info.Id);
                 modEntry.Logger.Error("Realistic Brakes stands aside: the stock brake runs.");
+                // And says so in the game: the mod manager lists the mod as loaded either way.
+                var aside = new GameObject("[RealisticBrakes]");
+                Object.DontDestroyOnLoad(aside);
+                aside.AddComponent<Notice>();
+                aside.AddComponent<StandAsideWarning>();
                 return true;
             }
             var multiplayer = UnityModManager.FindMod("Multiplayer");
@@ -90,10 +112,28 @@ namespace RealisticBrakes
             Object.DontDestroyOnLoad(host);
             host.AddComponent<AirOverlay>();
             host.AddComponent<Notice>();
-            host.AddComponent<Controls.LeverBench>();
             host.AddComponent<Sim.HandBrakeHold>();
             modEntry.Logger.Log("Realistic Brakes: the model runs every brake set.");
             return true;
+        }
+
+        /// <summary>
+        /// Which build this is, for the log: the public release or a test
+        /// build, and the commit it was built from. Both carry the same
+        /// version, and a log couldn't be matched to a build.
+        /// </summary>
+        internal static string Build
+        {
+            get
+            {
+                const string flavor = "public release";
+                var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                var plus = version == null ? -1 : version.IndexOf('+');
+                if (plus < 0 || plus + 1 >= version.Length)
+                    return flavor;
+                var commit = version.Substring(plus + 1);
+                return $"{flavor}, commit {(commit.Length > 10 ? commit.Substring(0, 10) : commit)}";
+            }
         }
 
         // The integrations with optional mods are assemblies of their own beside this one, loaded only when those mods are: the mod

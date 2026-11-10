@@ -315,6 +315,8 @@ namespace RealisticBrakes.Core
             if (Isolated)
             {
                 Applied = false;
+                // Released, the release valve closes by itself: a pull on a cut-out car isn't kept for when it's cut in.
+                releaseValveOpen = false;
                 TargetCylinder = 0;
                 exhausted += spec.IsolatedVent.Vent(Cylinder, dt);
                 exhausted += spec.IsolatedVent.Vent(QuickServiceChamber, dt);

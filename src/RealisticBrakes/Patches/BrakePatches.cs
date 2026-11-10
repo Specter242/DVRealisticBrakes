@@ -13,12 +13,29 @@ namespace RealisticBrakes.Patches
     /// the set. The stock tick still runs: its leak and handbrake flags, the
     /// cut-out count, and each car's braking force, heat, angle cocks, and
     /// readouts. Only its air methods stand aside (<see cref="StockAirPatches"/>).
-    /// If the model throws, the set falls back to the stock brake for the frame.
+    /// If the model throws, the set goes back to the stock brake, with the
+    /// game's brake force, for the frame; after a few such frames running, for
+    /// as long as the set lasts (until its train is coupled or parted).
     /// </summary>
     [HarmonyPatch(typeof(Brakeset), "Tick")]
     internal static class BrakesetTickPatch
     {
-        private static bool failed;
+        // How many frames running a set's model may fail before the set is left to the stock brake.
+        private const int FailuresBeforeLeaving = 3;
+
+        // The most different failures written to the log in full.
+        private const int MostLogged = 8;
+
+        private sealed class Failures
+        {
+            public int Running;
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Brakeset, Failures> failures =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<Brakeset, Failures>();
+        private static readonly HashSet<string> logged = new HashSet<string>();
+        private static bool anyFailed;
+        private static bool warned;
 
         private static void Prefix(Brakeset __instance, float dt)
         {
@@ -28,6 +45,9 @@ namespace RealisticBrakes.Patches
                 return;
             }
             Main.ReportOtherBrakeModsOnce();
+            Failures failing = null;
+            if (anyFailed && failures.TryGetValue(__instance, out failing) && failing.Running >= FailuresBeforeLeaving)
+                return;
             try
             {
                 if (BrakeSets.AiDriven(__instance) || BrakeSets.RunByM62(__instance))
@@ -36,15 +56,40 @@ namespace RealisticBrakes.Patches
                     return;
                 }
                 BrakeSets.Tick(__instance, dt);
+                if (failing != null)
+                    failing.Running = 0;
             }
             catch (Exception e)
             {
-                BrakeSets.Unhandle(__instance);
-                if (!failed)
-                {
-                    failed = true;
-                    Main.Mod.Logger.Error($"The brake model failed on a set of {__instance.cars.Count} cars; the stock brake runs it this frame (further failures not logged): {e}");
-                }
+                Failed(__instance, e);
+            }
+        }
+
+        // The stock brake takes the set from the pressures the model last wrote, with the game's own brake force: left with
+        // the model's, a loaded car braked at a fraction of what the stock brake expects.
+        private static void Failed(Brakeset set, Exception e)
+        {
+            anyFailed = true;
+            var failing = failures.GetOrCreateValue(set);
+            failing.Running++;
+            try
+            {
+                BrakeSets.LeaveToStock(set);
+            }
+            catch (Exception)
+            {
+                BrakeSets.Unhandle(set);
+            }
+            var left = failing.Running >= FailuresBeforeLeaving;
+            var kind = e.GetType().FullName + ": " + e.Message;
+            if (logged.Count < MostLogged && logged.Add(kind))
+                Main.Mod.Logger.Error($"The brake model failed on a set of {set.cars.Count} cars; the stock brake runs it this frame: {e}");
+            if (left)
+                Main.Mod.Logger.Error($"The brake model failed {failing.Running} frames running on a set of {set.cars.Count} cars ({kind}); the stock brake runs it until its train changes.");
+            if (left && !warned)
+            {
+                warned = true;
+                Notice.Warn("Realistic Brakes failed on a train, which the game's own brake now runs. Please report it with the log.");
             }
         }
 
@@ -143,6 +188,9 @@ namespace RealisticBrakes.Patches
         [HarmonyPatch(nameof(BrakeSystem.SetBrakePipePressure))]
         private static void PipeSet(BrakeSystem __instance, float value)
         {
+            // The setter writes a lone car's set's pipe pressure: a value the model takes, not another mod venting it.
+            if (__instance.brakeset != null && __instance.brakeset.cars.Count == 1)
+                BrakeSets.TookStockPipe(__instance.brakeset);
             if (BrakeSets.TryGet(__instance, out var air) && __instance.brakeset != null && __instance.brakeset.cars.Count == 1)
             {
                 air.Brake.PipeSection.Pressure = FromStock(air, CarAir.Pa(value));
@@ -196,16 +244,13 @@ namespace RealisticBrakes.Patches
 
         private static void CylinderSet(BrakeSystem system)
         {
-            // A vacuum car's cylinder stands for its piston's force, which follows its chamber and pipe; a forced value has
-            // nothing to set.
-            if (BrakeSets.TryGet(system, out var air) && air.Brake.Cylinder != null && !air.IsVacuum)
-            {
-                air.Brake.Cylinder.Pressure = CarAir.Pa(system.brakeCylinderPressureUnsmoothed);
-                air.Touch();
-            }
+            if (!BrakeSets.TryGet(system, out var air) || air.Brake.Cylinder == null)
+                return;
+            air.Brake.Cylinder.Pressure = CarAir.Pa(system.brakeCylinderPressureUnsmoothed);
+            air.Touch();
         }
 
-        // A value set in a stock field: on vacuum, an air equivalent of the vacuum it stands for.
+        // A value set in a stock field.
         private static double FromStock(CarAir air, double pascals) => pascals;
 
         [HarmonyPostfix]

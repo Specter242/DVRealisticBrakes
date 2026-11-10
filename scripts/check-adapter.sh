@@ -19,5 +19,6 @@ if grep -q -E "warning CS" <<<"$build"; then
     exit 1
 fi
 # A player may not have the Multiplayer mod: the check runs without its assembly.
-rm -f "$project/bin/Release/net48/MultiplayerAPI.dll"
-mono "$project/bin/Release/net48/RealisticBrakes.AdapterCheck.exe"
+bin="$project/bin/Release/net48"
+rm -f "${bin:?}/MultiplayerAPI.dll"
+mono "$bin/RealisticBrakes.AdapterCheck.exe"

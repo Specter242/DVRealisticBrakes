@@ -363,6 +363,9 @@ namespace RealisticBrakes.Core
         /// <summary>Restores the brake cylinder release valve's latch, as saved.</summary>
         public void RestoreCylinderRelease(bool open) => CylinderReleaseOpen = open && Applied;
 
+        // Whether the valve was cut out at its last step.
+        private bool cutOut;
+
         public void Step(Chamber pipe, double dt)
         {
             var pipeBefore = pipe.Mass;
@@ -374,10 +377,21 @@ namespace RealisticBrakes.Core
             {
                 Applied = false;
                 Emergency = false;
+                CylinderReleaseOpen = false;
+                cutOut = true;
                 exhausted += spec.ReleasePort.Vent(Cylinder, dt);
                 PipeDraw = 0;
                 ExhaustFlow = exhausted / dt;
                 return;
+            }
+            if (cutOut)
+            {
+                // Cut in. The quick-action chamber kept the pressure it was cut out with; against a pipe since reduced, it
+                // would open the vent valve and throw the train into emergency. A brakeman opens the cock slowly so that it
+                // doesn't; the game's lever is thrown at once, so the chamber is taken level with the pipe here (inferred).
+                cutOut = false;
+                if (QuickActionChamber.Pressure > pipe.Pressure)
+                    QuickActionChamber.Pressure = pipe.Pressure;
             }
 
             // The emergency portion: the quick-action chamber follows the pipe; a fall it can't keep up with is an emergency.

@@ -15,6 +15,7 @@ namespace RealisticBrakes.Controls
         private const float SlowApplication = 0.75f;
 
         private ControlImplBase control;
+        private TrainCar car;
         private bool sprungByJoint;
         private SteppedJoint joint;
         private IndependentBailClick bail;
@@ -47,6 +48,7 @@ namespace RealisticBrakes.Controls
                 return;
             var handle = control.gameObject.AddComponent<IndependentHandle>();
             handle.control = control;
+            handle.car = car;
             var spec = control.GetComponent<Lever>();
             var built = control.GetComponent<HingeJoint>() != null;
             if (spec != null && spec.useSteppedJoint && spec.steppedValueUpdate && spec.useLimits && !built)
@@ -83,6 +85,20 @@ namespace RealisticBrakes.Controls
                 return;
             if (!sprungByJoint || (joint == null && (joint = GetComponent<SteppedJoint>()) == null))
                 return;
+            // The spring out of release and quick application is the S-6's. With the model off, the engine put on
+            // European equipment, or its train left to the game's brake, the handle is an ordinary independent again, and
+            // sprung out of its bottom notch it rested a quarter applied until the cab was loaded afresh.
+            var s6 = Main.Active && IsS6(car) && Sim.BrakeSets.TryGet(car.brakeSystem, out _);
+            if (joint.useInnerLimitSpring != s6)
+            {
+                joint.useInnerLimitSpring = s6;
+                cachedAngle(joint) = float.NaN;
+            }
+            if (!s6)
+            {
+                HoldRelease(false);
+                return;
+            }
             var value = control.Value;
             // Held by a hand (grabbed), or by a key or the scroll wheel (the spring off while they turn it).
             var held = control.IsGrabbed() || !joint.isSpringActive;

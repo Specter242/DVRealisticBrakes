@@ -268,7 +268,9 @@ namespace RealisticBrakes.Core
         public double BailOff()
         {
             var vented = VentIndependent(double.PositiveInfinity);
-            if (!Distributor.Applied && !(spec.HoldsAutomaticBrake && HeldAutomatic > 0))
+            // Nothing stands to bail. An engine still letting go in running has: its cylinders follow the pilot down for
+            // some seconds after its distributor has released.
+            if (!Distributor.Applied && !(StandingAutomatic > 0))
                 return vented;
             // In the engine's own emergency on the E-T it lets off only for the moment it's held (BailHold).
             bailing = Math.Max(bailing, BailHold);
@@ -419,7 +421,6 @@ namespace RealisticBrakes.Core
                 // it's no longer held in release (Wood p. 120): a bail lasts only while the lever is held.
                 if (own && bailing <= 0)
                     BailedOff = 0;
-                bailing = Math.Max(0, bailing - dt);
                 BailedOff = Math.Max(0, Math.Min(BailedOff, HeldAutomatic));
                 automatic = Math.Max(0, HeldAutomatic - BailedOff);
             }
@@ -428,6 +429,8 @@ namespace RealisticBrakes.Core
                 BailedOff = Math.Max(0, Math.Min(BailedOff, Distributor.Applied ? Math.Max(Distributor.TargetCylinder, pilot) : pilot));
                 automatic = Math.Max(0, pilot - BailedOff);
             }
+            // On any engine the independent counts as held in release only for a moment after its last bail.
+            bailing = Math.Max(0, bailing - dt);
             var independent = spec.ManualLapIndependent ? StepIndependent(dt) : spec.IndependentMaximum * Math.Max(0, Math.Min(1, Independent));
             IndependentCylinder = independent;
             AutomaticCylinder = automatic;

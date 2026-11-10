@@ -72,6 +72,7 @@ public class BrakeReadingTests
     [InlineData("")]
     [InlineData("Pipe")]
     [InlineData("3")]
+    [InlineData("AuxiliaryReservoir,ControlReservoir")]
     public void AnUnknownNameIsNoPart(string name) => Assert.False(BrakeParts.TryParse(name, out _));
 }
 

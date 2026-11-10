@@ -22,24 +22,31 @@ namespace RealisticBrakes.Patches
     [OptionalPatch]
     internal static class CabControlsPatch
     {
-        private static void Postfix(InteriorControlsManager __instance)
+        private static void Postfix(InteriorControlsManager __instance) => Fit(__instance.Car, __instance);
+
+        /// <summary>
+        /// Fits <paramref name="car"/>'s brake handles, in <paramref name="cab"/> (null for an engine with no cab interior,
+        /// driven from its outside controls, as the WE-4U is) and among its outside controls; and with a cab, its gauges.
+        /// Each fitting leaves a handle already fitted as it is.
+        /// </summary>
+        internal static void Fit(TrainCar car, InteriorControlsManager cab)
         {
             // Every cab's handles: an engine with a cab at each end has a pair on each port (CabHandles).
-            var independents = CabHandles.Of(__instance, InteriorControlsManager.ControlType.IndBrake);
-            var trainBrakes = CabHandles.Of(__instance, InteriorControlsManager.ControlType.TrainBrake);
+            var independents = CabHandles.Of(car, cab, InteriorControlsManager.ControlType.IndBrake);
+            var trainBrakes = CabHandles.Of(car, cab, InteriorControlsManager.ControlType.TrainBrake);
             Try("the bail-off click", () =>
             {
                 foreach (var lever in independents)
-                    IndependentBailClick.Attach(lever, __instance.Car);
+                    IndependentBailClick.Attach(lever, car);
             });
             // Shown only while the model runs, so fitted either way.
-            Try("brake valve text", () => CabValveHover.Attach(__instance, __instance.Car));
+            Try("brake valve text", () => CabValveHover.Attach(car, cab));
             if (!Main.Active)
                 return;
             Try("the S-6 independent", () =>
             {
                 foreach (var lever in independents)
-                    IndependentHandle.Fit(lever, __instance.Car);
+                    IndependentHandle.Fit(lever, car);
             });
             // A handle widened without both of its value patches would read the new notches as stock values.
             Try("the train brake handle", () =>
@@ -47,12 +54,14 @@ namespace RealisticBrakes.Patches
                 if (Main.Settings.WidenTrainBrakeHandles
                     && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleNotchPatch)) && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleSetPatch)))
                     foreach (var handle in trainBrakes)
-                        TrainBrakeHandle.Widen(handle, __instance.Car);
+                        TrainBrakeHandle.Widen(handle, car);
             });
+            if (cab == null)
+                return;
             Try("the equalizing reservoir's hand", () =>
             {
                 if (Main.Settings.EqualizingHand)
-                    BrakeGauges.Fit(__instance, __instance.Car);
+                    BrakeGauges.Fit(cab, car);
             });
         }
 
@@ -72,9 +81,10 @@ namespace RealisticBrakes.Patches
     /// <summary>
     /// As a car's outside controls load near the player: times its bleed
     /// handle (<see cref="BleedHandle"/>), so a long pull drains the car, and
-    /// fits its brake levers beside it (<see cref="CarLevers"/>). Not part of
-    /// the brake itself: if this fails, a pull is always a short one and the
-    /// car has no levers.
+    /// fits its brake levers beside it (<see cref="CarLevers"/>); on an engine
+    /// with no cab interior, fits its brake handles (<see cref="CabControlsPatch.Fit"/>).
+    /// Not part of the brake itself: if this fails, a pull is always a short
+    /// one, the car has no levers, and the handles stay stock.
     /// </summary>
     [HarmonyPatch(typeof(TrainCar), nameof(TrainCar.LoadExternalInteractables))]
     [OptionalPatch]
@@ -103,6 +113,11 @@ namespace RealisticBrakes.Patches
             {
                 Main.Mod?.Logger.Warning($"A car's brake levers weren't fitted: {e.GetBaseException().GetType().Name}: {e.GetBaseException().Message}");
             }
+            // An engine with no cab interior is driven from its outside controls (the WE-4U's desks), which no cab's
+            // controls are set up from: its brake handles are fitted here. An engine with a cab is fitted as its cab sets up.
+            if (__instance.loadedExternalInteractables != null && __instance.carLivery != null && __instance.carLivery.interiorPrefab == null
+                && __instance.SimController != null && __instance.SimController.controlsOverrider != null)
+                CabControlsPatch.Fit(__instance, null);
         }
     }
 

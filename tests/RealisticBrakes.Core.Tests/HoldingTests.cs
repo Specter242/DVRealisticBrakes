@@ -58,3 +58,60 @@ public class HoldingTests
         Assert.False(Holding.ForceKeptByOtherMod(null, wardaleBrakesActive: true));
     }
 }
+
+public class WeighedCutTests
+{
+    [Fact]
+    public void ACutIsWeighedOnceWhileNothingChanges()
+    {
+        var cut = new Holding.Weighed();
+        Assert.True(cut.Due(7, 10.0));
+        cut.Record(7, 10.0, holds: true);
+        Assert.True(cut.Holds);
+        Assert.False(cut.Due(7, 10.0 + 1 / 60.0));
+        Assert.False(cut.Due(7, 10.4));
+    }
+
+    [Fact]
+    public void AChangedInputWeighsItAgainAtOnce()
+    {
+        var cut = new Holding.Weighed();
+        cut.Record(7, 10.0, holds: true);
+        Assert.True(cut.Due(8, 10.0 + 1 / 60.0));
+        cut.Record(8, 10.02, holds: false);
+        Assert.False(cut.Holds);
+        Assert.False(cut.Due(8, 10.1));
+    }
+
+    [Fact]
+    public void ItIsWeighedAgainAfterHalfASecondWhateverItsInputs()
+    {
+        var cut = new Holding.Weighed();
+        cut.Record(7, 10.0, holds: true);
+        Assert.False(cut.Due(7, 10.49));
+        Assert.True(cut.Due(7, 10.5));
+        cut.Record(7, 10.5, holds: true);
+        Assert.False(cut.Due(7, 10.9));
+    }
+
+    [Fact]
+    public void AnOffsetBringsOnlyTheFirstRefreshForward()
+    {
+        var cut = new Holding.Weighed(0.3);
+        cut.Record(7, 10.0, holds: true);
+        Assert.False(cut.Due(7, 10.19));
+        Assert.True(cut.Due(7, 10.2));
+        cut.Record(7, 10.2, holds: true);
+        Assert.False(cut.Due(7, 10.69));
+        Assert.True(cut.Due(7, 10.7));
+    }
+
+    [Fact]
+    public void AClockSetBackWeighsItAgain()
+    {
+        // A new session's clock starts over.
+        var cut = new Holding.Weighed();
+        cut.Record(7, 500.0, holds: true);
+        Assert.True(cut.Due(7, 3.0));
+    }
+}

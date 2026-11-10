@@ -23,9 +23,8 @@ namespace RealisticBrakes.Sim
         /// <summary>The game's main reservoir ceiling, bar absolute (its compressor clamps there).</summary>
         private const float MainReservoirCeiling = 9f;
 
-        private CarAir(BrakeSystem system, TrainCar car, CarBrake brake, int generation, BrakeRigging rigging, bool vacuum)
+        private CarAir(BrakeSystem system, TrainCar car, CarBrake brake, int generation, BrakeRigging rigging)
         {
-            IsVacuum = vacuum;
             System = system;
             Car = car;
             Brake = brake;
@@ -43,13 +42,6 @@ namespace RealisticBrakes.Sim
             forceOverridden = rigging != null;
         }
 
-        /// <summary>
-        /// Whether the car runs the vacuum brake: its stock fields then hold
-        /// air equivalents (<see cref="Core.Vacuum.AirEquivalent"/>), so the
-        /// stock brake, if it takes over, and other code reading them see a
-        /// train charged or applied as this one is.
-        /// </summary>
-        public bool IsVacuum { get; }
 
         /// <summary>The freight car's rigging, whose force is its own rather than its load's; null for cars the game's force stays on (engines, tenders, coaches).</summary>
         public BrakeRigging Rigging { get; }
@@ -95,10 +87,13 @@ namespace RealisticBrakes.Sim
         /// <summary>The air let out this frame, in the game's units, for the audio.</summary>
         public float ExhaustFlow { get; private set; }
 
-        /// <summary>The car's pipe pressure, bar absolute, for its gauge: on vacuum, its air equivalent.</summary>
+        /// <summary>Whether the car has no brake of its own in the model: a tender or slug, whose cylinders the stock code copies from its engine.</summary>
+        private bool CopiesItsEngine => Brake.Valve == null && Brake.Locomotive == null;
+
+        /// <summary>The car's pipe pressure as the stock field holds it, bar absolute, for its gauge.</summary>
         public float PipeBar => Bar(Stock(Brake.PipeSection.Pressure));
 
-        /// <summary><paramref name="pascals"/> as the stock fields hold it: on vacuum, its air equivalent.</summary>
+        /// <summary><paramref name="pascals"/> as the stock fields hold it.</summary>
         private double Stock(double pascals) => pascals;
 
         /// <summary>Builds a car's air from its brake setup and the pressures the game holds for it now.</summary>
@@ -153,7 +148,7 @@ namespace RealisticBrakes.Sim
                 brake = new CarBrake(length, geometry);
             }
             brake.PipeSection.Pressure = pipe;
-            return new CarAir(system, car, brake, generation, RiggingFor(car), vacuum: false);
+            return new CarAir(system, car, brake, generation, RiggingFor(car));
         }
 
 
@@ -301,7 +296,10 @@ namespace RealisticBrakes.Sim
             touched = false;
             // The game's bleed handle: a press is a short pull; held past a few seconds (BleedHandle), it drains the reservoirs.
             var engine = Brake.Locomotive;
-            if (bs.controlReservoirPressureReleased)
+            // Not on a tender or slug copying its engine's cylinders: the stock code that does the copying takes the pull
+            // too, and lets a detached one go. Taken here, the pull was lost and a tender uncoupled with the engine brake
+            // on stayed locked.
+            if (bs.controlReservoirPressureReleased && !CopiesItsEngine)
             {
                 Brake.Valve?.PullRelease();
                 engine?.PullRelease();
@@ -437,7 +435,7 @@ namespace RealisticBrakes.Sim
             {
                 bs.auxReservoirPressure = Bar(Stock(valve.AuxiliaryReservoir.Pressure));
                 // An American valve has no control reservoir; its auxiliary stands in, so the stock brake, if it takes over, sees
-                // no reduction. A vacuum car's chamber stands in for both.
+                // no reduction.
                 bs.controlReservoirPressure = Bar(Stock(Brake.Distributor?.ControlReservoir.Pressure ?? valve.AuxiliaryReservoir.Pressure));
                 bs.brakeCylinderPressureUnsmoothed = Bar(valve.Cylinder.Pressure);
                 // As the stock brake counts it: the reservoirs' charging and the cylinder's filling.
@@ -469,6 +467,8 @@ namespace RealisticBrakes.Sim
                 else if (bs.compressorActivationSignal && mr >= off)
                     bs.ToggleCompressorActivationSignal();
             }
+            // Another mod venting the pipe at this engine (BrakeSets.VentFromOutside) blows as the brake valve's exhaust does.
+            exhaust += Brake.OutsideVentFlow;
             PipeFlow = (float)pipeIn * StockFlowPerKgPerSecond;
             ExhaustFlow = (float)exhaust * StockFlowPerKgPerSecond;
         }

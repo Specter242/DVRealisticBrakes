@@ -94,7 +94,7 @@ namespace RealisticBrakes.Core
         public bool RearOpen { get; set; }
 
 
-        /// <summary>The air let out at the front end in the last step, or let in on a vacuum pipe, kg/s, for the hoses' sound.</summary>
+        /// <summary>The air through the front end's open cock in the last step, whichever way it ran, kg/s, for the hoses' sound.</summary>
         public double FrontVentFlow { get; private set; }
 
         /// <summary>The air let out at the rear end in the last step, or let in, kg/s.</summary>
@@ -166,7 +166,7 @@ namespace RealisticBrakes.Core
                     s.Mass = 0;
         }
 
-        // An end's flow through its open cock, out of an air pipe or into a vacuum one, kg/s.
+        // An end's flow through its open cock, whichever way it runs, kg/s.
         private double Vent(bool open, Chamber end, double dt) => open ? Math.Abs(Geometry.OpenEnd.OpenToAtmosphere(end, dt)) / dt : 0;
 
         /// <summary>

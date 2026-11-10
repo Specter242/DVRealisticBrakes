@@ -26,8 +26,18 @@ namespace RealisticBrakes.Sim
         // Each cut with a fresh car, and when its newest fresh car appeared.
         private readonly Dictionary<Trainset, float> newest = new Dictionary<Trainset, float>();
         private readonly List<HeldCar> held = new List<HeldCar>();
-        private readonly HashSet<TrainCar> scaled = new HashSet<TrainCar>();
-        private readonly HashSet<TrainCar> scaledNow = new HashSet<TrainCar>();
+        // The cars held last frame and this one; the two sets change places each frame.
+        private HashSet<TrainCar> scaled = new HashSet<TrainCar>();
+        private HashSet<TrainCar> scaledNow = new HashSet<TrainCar>();
+
+        // Each standing cut's last weighing (Holding.Weighed). A coupling or uncoupling makes new cuts, weighed afresh.
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Trainset, Holding.Weighed> weighings =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<Trainset, Holding.Weighed>();
+        private double nextOffset;
+
+        // The slowest the game's freeze lets go of a car, m/s, on the level (StopCreep): a cut none of whose cars is faster
+        // isn't creeping.
+        private const float SlowestCreep = 0.01f;
 
         // The cars whose hand brakes SecureFresh set, until they come off or a driver takes them over.
         private readonly HashSet<TrainCar> secured = new HashSet<TrainCar>();
@@ -51,16 +61,17 @@ namespace RealisticBrakes.Sim
                 SecureFresh();
                 FreeForDrivers();
                 foreach (var set in Trainset.allSets)
-                    if (set != null && Standing(set))
-                        Hold(set);
+                    if (set != null && (Standing(set, out var fastest) || Settling(set, out fastest)))
+                        Hold(set, fastest);
             }
             // A car no longer held gets back its force per kg and its factor at once: the rigging's or the game's (a review,
             // 2026-10-27: with the brake force from the load, the rigging stops rewriting it, and the scaled force stayed).
             foreach (var car in scaled)
                 if (!scaledNow.Contains(car) && car != null)
                     Restore(car);
-            scaled.Clear();
-            scaled.UnionWith(scaledNow);
+            var last = scaled;
+            scaled = scaledNow;
+            scaledNow = last;
         }
 
         // Follows the game's spawner, which isn't there until a game loads (it isn't made on demand: no AllowAutoCreate).
@@ -78,32 +89,73 @@ namespace RealisticBrakes.Sim
                 spawner.CarSpawned += OnSpawned;
         }
 
+        // Only while the model runs: kept, every cut spawned with it off was weighed in one frame when it came on, and any
+        // its brakes couldn't hold had its hand brakes set, however long it had stood.
         private void OnSpawned(TrainCar car)
         {
-            if (car != null)
+            if (car != null && Main.Active)
                 fresh[car] = Time.time;
         }
 
-        private static bool Standing(Trainset set)
+        private static bool Standing(Trainset set) => Standing(set, out _);
+
+        // Whether every car of the cut stands, and then the most any of them moves, m/s, in any direction. A car's speed
+        // in any direction is at least its speed along the track, so one under the limit that way stands without the
+        // dearer reading along the track.
+        private static bool Standing(Trainset set, out float fastest)
         {
+            var most = 0f;
             foreach (var car in set.cars)
-                if (car == null || car.derailed || Mathf.Abs(car.GetForwardSpeed()) > StandingSpeed)
+            {
+                if (car == null || car.derailed)
+                {
+                    fastest = 0f;
                     return false;
+                }
+                var speed = car.rb != null ? car.rb.velocity.sqrMagnitude : 0f;
+                if (speed > StandingSpeed * StandingSpeed && Mathf.Abs(car.GetForwardSpeed()) > StandingSpeed)
+                {
+                    fastest = 0f;
+                    return false;
+                }
+                most = Mathf.Max(most, speed);
+            }
+            fastest = Mathf.Sqrt(most);
             return true;
+        }
+
+        // Whether a cut that isn't standing is a fresh one still settling from the game's jolt as it appears, to be held
+        // all the same (FreshCut.Settling), and the most any of its cars moves, m/s.
+        private bool Settling(Trainset set, out float fastest)
+        {
+            fastest = 0f;
+            if (!Fresh(set))
+                return false;
+            var most = 0f;
+            foreach (var car in set.cars)
+            {
+                if (car == null || car.derailed || car.IsLoco)
+                    return false;
+                if (car.rb != null)
+                    most = Mathf.Max(most, car.rb.velocity.sqrMagnitude);
+            }
+            fastest = Mathf.Sqrt(most);
+            return FreshCut.Settling(fastest, hasEngine: false, driven: BrakeSets.AiDriven(set));
         }
 
         // Sets the freeze for a standing cut from whether its brakes hold it. A cut just spawned or loaded is frozen outright,
         // its unbraked cars too, until it's weighed and secured (SecureFresh), so it can't roll off before then (a review,
         // 2026-10-27: a fresh cut with no brake on had nothing to freeze).
-        private void Hold(Trainset set)
+        private void Hold(Trainset set, float fastest)
         {
             var unweighed = Fresh(set);
-            var holds = unweighed || Weigh(set);
+            var holds = unweighed || Holds(set);
             var frozen = false;
             foreach (var car in set.cars)
             {
                 var brakes = car.brakeSystem;
-                if (brakes == null || !BrakeSets.Handles(brakes))
+                // The cars the model ran this frame (the hold runs only while the model does).
+                if (brakes == null || !BrakeSets.TryGet(brakes, out var air) || !air.Handled)
                     continue;
                 var target = brakes.unaffectedTargetBrakingFactor * brakes.heatController.overheatReductionFactor;
                 if (target < Braked && !unweighed)
@@ -112,7 +164,7 @@ namespace RealisticBrakes.Sim
                 // The same force at the new factor; none for an unbraked car frozen. Not where another mod keeps the force.
                 if (!ForceKeptByOtherMod(car))
                 {
-                    var basePerKg = BasePerKg(car);
+                    var basePerKg = air.Rigging != null ? air.RiggedPerKg : StockPerKg(car);
                     foreach (var bogie in car.Bogies)
                         if (bogie != null)
                             bogie.maxBrakingForcePerKg = basePerKg * Mathf.Max(0f, target) / factor;
@@ -121,8 +173,46 @@ namespace RealisticBrakes.Sim
                 scaledNow.Add(car);
                 frozen |= holds;
             }
-            if (frozen && !Net.IsGuest)
+            if (frozen && !Net.IsGuest && fastest > SlowestCreep)
                 StopCreep(set);
+        }
+
+        // Whether the cut's brakes hold it, from its last weighing while that stands (Holding.Weighed): weighed again when
+        // a car's braking or mass has changed, and twice a second regardless.
+        private bool Holds(Trainset set)
+        {
+            if (!weighings.TryGetValue(set, out var weighed))
+            {
+                // Each new cut's refresh a little apart from the last one's.
+                nextOffset = (nextOffset + 0.07) % Holding.Weighed.RefreshSeconds;
+                weighed = new Holding.Weighed(nextOffset);
+                weighings.Add(set, weighed);
+            }
+            var inputs = Inputs(set);
+            if (weighed.Due(inputs, Time.time))
+                weighed.Record(inputs, Time.time, Weigh(set));
+            return weighed.Holds;
+        }
+
+        // What a weighing changes with from frame to frame, summed up: each car's braking, to a thousandth of full, and
+        // its mass, to the kilogram.
+        private static int Inputs(Trainset set)
+        {
+            var cars = set.cars;
+            var sum = cars.Count;
+            unchecked
+            {
+                for (var i = 0; i < cars.Count; i++)
+                {
+                    var car = cars[i];
+                    var brakes = car.brakeSystem;
+                    var target = brakes != null ? brakes.unaffectedTargetBrakingFactor * brakes.heatController.overheatReductionFactor : 0f;
+                    var mass = car.massController != null ? car.massController.TotalMass : 0f;
+                    sum = sum * 31 + Mathf.RoundToInt(target * 1000f);
+                    sum = sum * 31 + Mathf.RoundToInt(mass);
+                }
+            }
+            return sum;
         }
 
         // The game freezes a slow car only under a hair of speed, 0.01 m/s on the level to 0.1 at 5°, and below 0.1 m/s fades

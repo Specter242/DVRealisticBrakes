@@ -143,15 +143,22 @@ namespace RealisticBrakes.Sim
         /// Forgets a car's air as the game resets the car for reuse, giving its
         /// bogies back the game's force first (the game sets it only once, as
         /// the car is first made) and dropping any save entry held for it.
+        /// The game's reset leaves the auxiliary reservoir as the last car had
+        /// it: an American car reused with air in it applied from that air as
+        /// it spawned, where a new one stands released. It gets a new car's.
         /// </summary>
         public static void Forget(BrakeSystem system)
         {
             if (cars.TryGetValue(system, out var air))
                 air.RestoreForce();
+            system.auxReservoirPressure = NewAuxiliaryReservoir;
             cars.Remove(system);
             SavedAir.Discard(system);
             Net.Forget(system);
         }
+
+        /// <summary>A new car's auxiliary reservoir, bar absolute (the stock field's initial value).</summary>
+        internal const float NewAuxiliaryReservoir = 1f;
 
         /// <summary>Whether the model ran <paramref name="system"/>'s car this frame.</summary>
         public static bool Handles(BrakeSystem system) => Main.Active && TryGet(system, out var air) && air.Handled;
@@ -177,6 +184,7 @@ namespace RealisticBrakes.Sim
             var changed = frontOpen != pipe.FrontOpen || rearOpen != pipe.RearOpen;
             pipe.FrontOpen = frontOpen;
             pipe.RearOpen = rearOpen;
+            changed |= VentFromOutside(set, line, dt);
 
             airs.Clear();
             foreach (var system in set.cars)
@@ -217,35 +225,75 @@ namespace RealisticBrakes.Sim
         /// <summary>
         /// The set's one stock pipe pressure, bar absolute, for code that
         /// reads it (the remote's brake readout): the pipe at the engine whose
-        /// driver's valve is cut in, or at the first car when none is; on
-        /// vacuum, its air equivalent.
+        /// driver's valve is cut in, or at the first car when none is, as
+        /// the stock fields hold it.
         /// </summary>
         private static float SetPressure(Brakeset set, BrakeLine line)
         {
-            var at = 0;
+            var pressure = line.Pipe[DrivingIndex(line)].Pressure;
+            return CarAir.Bar(pressure);
+        }
+
+        /// <summary>The car of <paramref name="line"/> whose driver's valve is cut in, working the train, or the first when none is.</summary>
+        private static int DrivingIndex(BrakeLine line)
+        {
             for (var i = 0; i < line.Cars.Count; i++)
             {
                 var car = line.Cars[i];
                 if (car.Locomotive?.DriverValve?.CutIn == true)
+                    return i;
+            }
+            return 0;
+        }
+
+        // Each set's stock pipe pressure as this mod last wrote it, watched for another mod venting it.
+        private static readonly ConditionalWeakTable<Brakeset, OutsideVentWatch> watches = new ConditionalWeakTable<Brakeset, OutsideVentWatch>();
+        private static bool outsideVentLogged;
+
+ private static bool VentFromOutside(Brakeset set, BrakeLine line, float dt)
+        {
+            var watch = watches.GetOrCreateValue(set);
+            var open = watch.Check(set.pipePressure, dt, Time.frameCount, watching: !Net.IsGuest);
+            var at = open ? DrivingIndex(line) : -1;
+            var changed = false;
+            for (var i = 0; i < line.Cars.Count; i++)
+            {
+                var vent = i == at;
+                if (line.Cars[i].OutsideVent != vent)
                 {
-                    at = i;
-                    break;
+                    line.Cars[i].OutsideVent = vent;
+                    changed = true;
                 }
             }
-            var pressure = line.Pipe[at].Pressure;
-            return CarAir.Bar(pressure);
+            if (watch.Fell && !outsideVentLogged)
+            {
+                outsideVentLogged = true;
+                var engine = TrainCar.Resolve(set.cars[Mathf.Clamp(at, 0, set.cars.Count - 1)].gameObject);
+                Main.Mod?.Logger.Log($"Another mod vented the brake pipe of {(engine != null ? engine.ID : "a train")}'s train "
+                    + "(a vigilance device or a dead man); the model vents it at the engine working the train while it does (not logged again)");
+            }
+            return changed || open;
+        }
+
+        /// <summary>A stock setter put a value in <paramref name="set"/>'s pipe pressure, which the model takes: not a vent.</summary>
+        public static void TookStockPipe(Brakeset set)
+        {
+            if (set != null && watches.TryGetValue(set, out var watch))
+                watch.Took(set.pipePressure);
         }
 
         /// <summary>
         /// After the stock tick: each end hose's exhaust, for its sound and
         /// spray, from the model's ends, and the set's pipe pressure again,
-        /// as the stock leak code lowers it when an end stands open.
+        /// as the stock leak code lowers it when an end stands open. What's
+        /// written is watched for another mod venting it before the next tick.
         /// </summary>
         public static void AfterStockTick(Brakeset set)
         {
             if (!lines.TryGetValue(set, out var line))
                 return;
             set.pipePressure = SetPressure(set, line);
+            watches.GetOrCreateValue(set).Wrote(set.pipePressure, Time.frameCount);
             // The stock flow is the pipe's fall, bar/s over 6; an open 25 mm end blows about 0.5 kg/s at first (inferred scale).
             set.GetEndmost(front: true).exhaustFlow = Mathf.Clamp01((float)line.Pipe.FrontVentFlow * 2f);
             set.GetEndmost(front: false).exhaustFlow = Mathf.Clamp01((float)line.Pipe.RearVentFlow * 2f);

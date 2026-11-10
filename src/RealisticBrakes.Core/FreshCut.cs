@@ -43,6 +43,27 @@ namespace RealisticBrakes.Core
             return age >= GiveUpAfter ? Step.Drop : Step.Wait;
         }
 
+        /// <summary>
+        /// The fastest a car of a fresh cut may move, m/s, and the cut still
+        /// be held as it settles (<see cref="Settling"/>): twice the 0.49 m/s
+        /// the fastest car read in the jolt, held (job 1703).
+        /// </summary>
+        public const double SettlingSpeed = 1.0;
+
+        /// <summary>
+        /// Whether a fresh cut that isn't standing is held all the same, as
+        /// one still settling. The game jolts a cut about three quarters of a
+        /// second after it appears, its cars up to 0.3 m/s against each other;
+        /// that is over the speed a cut counts as standing under, so the
+        /// freeze let go, and on a grade the cut was caught again only if
+        /// every car happened to be slow at one moment. Of 20 cuts of six
+        /// spawned on 1.2 %, five rolled away unsecured (the in-game checks
+        /// of 2026-11-09, jobs 1687, 1697, and 1703). Not a cut with an engine, which
+        /// its driver may be starting, nor one another mod's driver runs.
+        /// </summary>
+        public static bool Settling(double fastest, bool hasEngine, bool driven) =>
+            !hasEngine && !driven && fastest <= SettlingSpeed;
+
         /// <summary>Whether to set the hand brakes of a fresh cut: standing, driven by no other mod's driver, and not held by its brakes.</summary>
         public static bool Secures(bool standing, bool driven, bool holds) => standing && !driven && !holds;
 

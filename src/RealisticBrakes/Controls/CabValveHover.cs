@@ -8,19 +8,22 @@ namespace RealisticBrakes.Controls
 {
  internal static class CabValveHover
     {
-        /// <summary>Adds the text to <paramref name="cab"/>'s brake controls, every cab's (<see cref="CabHandles"/>), read from <paramref name="car"/>'s engine.</summary>
-        public static void Attach(InteriorControlsManager cab, TrainCar car)
+        /// <summary>
+        /// Adds the text to <paramref name="car"/>'s brake controls, every cab's and the outside ones (<see cref="CabHandles"/>),
+        /// read from its engine; <paramref name="cab"/> is null for an engine with no cab interior.
+        /// </summary>
+        public static void Attach(TrainCar car, InteriorControlsManager cab)
         {
-            foreach (var control in CabHandles.Of(cab, InteriorControlsManager.ControlType.TrainBrake))
+            foreach (var control in CabHandles.Of(car, cab, InteriorControlsManager.ControlType.TrainBrake))
                 Add(control, car, (air, engine) => CabValveText.TrainBrake(engine, air.System.selfLappingController));
             // The S-6 handle is fitted after this, so it's looked for as the text is drawn.
-            foreach (var control in CabHandles.Of(cab, InteriorControlsManager.ControlType.IndBrake))
+            foreach (var control in CabHandles.Of(car, cab, InteriorControlsManager.ControlType.IndBrake))
             {
                 var independent = control;
                 Add(control, car, (air, engine) => air.System.hasIndependentBrake
                     ? CabValveText.Independent(engine, Main.Settings.ClickToBailOff, HasReleaseNotch(independent)) : null);
             }
-            foreach (var control in CabHandles.Of(cab, InteriorControlsManager.ControlType.TrainBrakeCutout))
+            foreach (var control in CabHandles.Of(car, cab, InteriorControlsManager.ControlType.TrainBrakeCutout))
                 Add(control, car, (air, engine) => CabValveText.Cutout(engine.DriverValve));
         }
 

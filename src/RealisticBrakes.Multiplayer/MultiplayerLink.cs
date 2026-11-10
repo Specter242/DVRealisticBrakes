@@ -406,7 +406,6 @@ namespace RealisticBrakes.Sim
                 WidenTrainBrakeHandles = reader.ReadBoolean(),
                 // An older host has no load braking setting: its American cars have automatic empty/load.
                 LoadBraking = LoadBraking.EmptyLoad,
-                // Nor vacuum equipment, whose DA valves are on by default.
                 DirectAdmission = true,
                 // Nor engines' own standards: every engine used the setting.
                 EveryEngineUsesSetting = true,

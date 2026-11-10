@@ -59,8 +59,8 @@ public class TrainTests
     [Fact]
     public void TenTimesTheTimeInBigStepsMatchesTenTimesTheFrames()
     {
-        // The game's default setting runs the air ten times as fast: the adapter advances each
-        // frame by ten frames' time, so long steps must give what short ones do.
+        // A long step must give what short ones do: a slow frame advances the line by all of its time at once.
+        // (The air once ran ten times as fast at the game's default setting, which gave this test its name.)
         Rig Run(double step, int frames)
         {
             var rig = new Rig(30);
@@ -408,6 +408,39 @@ public class BailOffTests
         rig.Valve.Position = DriverValvePosition.Running;
         reapplied = rig.RunUntil(() => rig.Engine.Cylinder.GaugeBar > 0.1, 60);
         Assert.True(double.IsNaN(reapplied), $"the engine applied again {reapplied:F1} s into the release");
+    }
+
+    [Fact]
+    public void TheIndependentCountsAsHeldInReleaseOnlyBrieflyOnAnEngineWithoutTheET()
+    {
+        var rig = new Rig(5, BrakingMode.Passenger);
+        rig.Service(0.8);
+        rig.Run(20);
+        Assert.True(rig.Engine.BailOff() > 0);
+        Assert.True(rig.Engine.HeldInRelease);
+        rig.Run(1);
+        Assert.False(rig.Engine.HeldInRelease);
+    }
+
+    [Fact]
+    public void ABailLetsGoAnEngineStillReleasing()
+    {
+        // In running the engine's distributor lets go in a few seconds, and its cylinders follow the pilot down for longer.
+        double After(bool bail)
+        {
+            var rig = new Rig(5, BrakingMode.Passenger);
+            rig.Service(1.5);
+            rig.Run(30);
+            rig.Valve.Position = DriverValvePosition.Running;
+            Assert.False(double.IsNaN(rig.RunUntil(() => !rig.Engine.Distributor.Applied, 30)));
+            Assert.InRange(rig.Engine.Cylinder.GaugeBar, 1.0, 4.0);
+            if (bail)
+                Assert.True(rig.Engine.BailOff() > 0);
+            rig.Run(5);
+            return rig.Engine.Cylinder.GaugeBar;
+        }
+        Assert.InRange(After(bail: true), 0, 0.1);
+        Assert.InRange(After(bail: false), 0.5, 4.0);
     }
 
     [Fact]

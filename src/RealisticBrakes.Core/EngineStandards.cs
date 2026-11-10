@@ -39,7 +39,6 @@ namespace RealisticBrakes.Core
             ["S2102-870"] = AirStandard.American,
             // E_noob's DB BR95, a Prussian T 20.
             ["S2102-720"] = AirStandard.European,
-            // Not here: the LMS 8F, whose own is vacuum, a whole-world setting; on air it follows the setting.
         };
 
         /// <summary>The standard of the engine of <paramref name="liveryId"/>, else of <paramref name="typeId"/>; null when unknown.</summary>

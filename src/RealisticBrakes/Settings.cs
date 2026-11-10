@@ -68,11 +68,6 @@ namespace RealisticBrakes
         [Draw("Show each car's brake pressures for the train you're on")]
         public bool ShowOverlay;
 
-        // The lever bench, a development tool for seating the car levers in
-        // game: shown and hidden by this key, unbound unless set in
-        // Settings.xml (not in the menu). Nothing it sets is saved; it
-        // writes the seats to the log to be built in.
-        public KeyBinding DevBenchKey = new KeyBinding();
 
         public override void Save(UnityModManager.ModEntry modEntry)
         {

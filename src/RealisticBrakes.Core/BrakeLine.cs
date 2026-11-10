@@ -9,9 +9,8 @@ namespace RealisticBrakes.Core
         public const double MaxSubstep = 0.004;
 
         /// <summary>
-        /// The most substeps one step takes: 1.6 s of air, enough for a 20 fps
-        /// frame at the game's default ten-times setting. A longer hitch is
-        /// slowed to this.
+        /// The most substeps one step takes: 1.6 s of air, far more than a
+        /// frame. A longer hitch is slowed to this.
         /// </summary>
         public const int MaxSubsteps = 400;
 

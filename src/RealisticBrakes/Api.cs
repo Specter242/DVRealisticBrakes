@@ -49,7 +49,7 @@ namespace RealisticBrakes
         public static float Pressure(TrainCar car, string part)
         {
             if (!Main.Active || car == null || car.brakeSystem == null || !Core.BrakeParts.TryParse(part, out var which)
-                || !BrakeSets.TryGet(car.brakeSystem, out var air) || air.IsVacuum)
+                || !BrakeSets.TryGet(car.brakeSystem, out var air))
                 return float.NaN;
             return (float)(air.Brake.GaugePressure(which) / Core.Air.Bar);
         }
@@ -64,8 +64,6 @@ namespace RealisticBrakes
         {
             if (!Main.Active || car == null || car.brakeSystem == null || !BrakeSets.TryGet(car.brakeSystem, out var air))
                 return null;
-            if (air.IsVacuum)
-                return "Vacuum";
             if (air.Brake.Locomotive != null)
                 return CarAir.IsAmericanEngine(car) ? "American" : "European";
             return Main.Settings.Equipment == RealisticBrakes.Equipment.American ? "American" : "European";

@@ -57,4 +57,21 @@ public class FreshCutTests
         Assert.Equal(FreshCut.Step.Drop, FreshCut.Next(age: 0.5, standing: true, driven: true));
         Assert.Equal(FreshCut.Step.Drop, FreshCut.Next(age: 10, standing: false, driven: true));
     }
+
+    [Fact]
+    public void ACutJoltedAsItAppearsIsHeldWhileItSettles()
+    {
+        // The game's jolt moves a new cut's cars up to 0.3 m/s, over the 0.15 m/s it stands under.
+        Assert.True(FreshCut.Settling(0.3, hasEngine: false, driven: false));
+        Assert.True(FreshCut.Settling(0.5, hasEngine: false, driven: false));
+        Assert.True(FreshCut.Settling(FreshCut.SettlingSpeed, hasEngine: false, driven: false));
+    }
+
+    [Fact]
+    public void ACutThatIsMovedOrDrivenIsNotHeldAsSettling()
+    {
+        Assert.False(FreshCut.Settling(1.1, hasEngine: false, driven: false));
+        Assert.False(FreshCut.Settling(0.3, hasEngine: true, driven: false));
+        Assert.False(FreshCut.Settling(0.3, hasEngine: false, driven: true));
+    }
 }

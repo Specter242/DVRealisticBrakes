@@ -68,7 +68,7 @@ namespace RealisticBrakes.Sim
             return entry;
         }
 
-        // Whether the car is an engine, air or vacuum, whose handle's added notch is saved with it.
+        // Whether the car is an engine, whose handle's added notch is saved with it.
         private static bool HasEngine(CarBrake brake) => brake.Locomotive != null;
 
         private static void WriteAmerican(JObject entry, AarControlValve valve)
@@ -151,14 +151,15 @@ namespace RealisticBrakes.Sim
         {
             if ((int?)entry["v"] != Version)
                 return;
-            // A car reads only its own family's entry: a European one has none, an American one "AAR", a vacuum one "VAC".
+            // A car reads only its own family's entry: a European one has none, an American one "AAR".
             var family = (string)entry["family"];
             if (brake.Distributor != null && family == null)
                 ReadValve(entry, brake.Distributor, "");
             if (brake.ControlValve != null)
                 ReadAmerican(entry, brake.ControlValve);
             var engine = brake.Locomotive;
-            if (engine != null && family != "VAC")
+            // An air engine's entry has no family, or its own valve's.
+            if (engine != null && (family == null || family == "AAR"))
             {
                 ReadValve(entry, engine.Distributor, "loco");
                 engine.BailedOff = ((float?)entry["bailed"] ?? 0f) * Air.Bar;

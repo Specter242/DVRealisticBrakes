@@ -63,6 +63,12 @@ namespace RealisticBrakes.AdapterCheck
 
             var field = AccessTools.Field(typeof(BrakeSystem), "mainReservoirPressureUnsmoothed");
             Check(field != null && field.FieldType == typeof(float), "BrakeSystem.mainReservoirPressureUnsmoothed is a float field");
+            var easing = AccessTools.Field(typeof(BrakeSystem), "brakingFactorRef");
+            Check(easing != null && easing.FieldType == typeof(float),
+                "BrakeSystem.brakingFactorRef is a float field, which the hold sets as it freezes a standing cut's braking factor");
+            var auxiliary = AccessTools.Field(typeof(BrakeSystem), "auxReservoirPressure");
+            Check(auxiliary != null && auxiliary.FieldType == typeof(float),
+                "BrakeSystem.auxReservoirPressure is a float field, which a reused car is given a new car's value in");
 
             // The public API other mods call by reflection keeps its shape (scripts/public/README.md, "For other mods").
             var api = typeof(RealisticBrakes.Api);
@@ -99,6 +105,18 @@ namespace RealisticBrakes.AdapterCheck
             var notchAngle = AccessTools.Field(typeof(SteppedJoint), "cachedAngle");
             Check(notchAngle != null && notchAngle.FieldType == typeof(float),
                 "a notched lever keeps the angle it last aimed its spring from in a float, which the S-6 handle clears to re-aim it");
+            // An engine whose handles feed ports of their own (the WE-4U): its brake handles are the ones the game's brake keys move.
+            var actionName = AccessTools.Field(typeof(DV.KeyboardInput.AKeyboardInput.ActionReference), "name");
+            var gameActions = typeof(DV.Interaction.Inputs.InputManager).GetNestedType("RewiredActionConsts", BindingFlags.Public | BindingFlags.NonPublic)?
+                .GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => f.IsLiteral).Select(f => f.Name).ToList() ?? new List<string>();
+            var brakeActions = gameActions.Where(n => Core.BrakeKeyActions.Of(n) != Core.BrakeKeyControl.None).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            var expectedActions = new[] { "BrakeAbsolute", "BrakeCutoutAbsolute", "BrakeCutoutIncremental", "BrakeCutoutToggle", "BrakeIncremental",
+                "IndependentBrakeAbsolute", "IndependentBrakeIncremental" };
+            Check(actionName != null && actionName.FieldType == typeof(string)
+                  && Controls.CabHandles.ActionFields(typeof(DV.KeyboardInput.MouseScrollKeyboardInput)).Length > 0
+                  && Controls.CabHandles.ActionFields(typeof(DV.KeyboardInput.AnalogSetValueJoystickInput)).Length > 0
+                  && brakeActions.SequenceEqual(expectedActions),
+                $"a handle's key inputs name their actions, and the game's brake actions are the seven the handles are found by ({string.Join(", ", brakeActions)})");
 
             foreach (var name in Patches.StockAirPatches.Methods)
             {
@@ -253,7 +271,6 @@ namespace RealisticBrakes.AdapterCheck
                   && typeof(Patches.WidenedHandleNotchPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && typeof(Patches.WidenedHandleSetPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && typeof(Patches.CarControlsPatch).IsDefined(typeof(OptionalPatchAttribute), false)
-                  && typeof(Patches.BenchSpawnerPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && typeof(Patches.AirPumpSteamPatch).IsDefined(typeof(OptionalPatchAttribute), false)
                   && !typeof(Patches.BrakesetTickPatch).IsDefined(typeof(OptionalPatchAttribute), false),
                 "only the cab controls' and the air pumps' steam patches are optional; the brake's own patches stand or fall together");
@@ -274,7 +291,7 @@ namespace RealisticBrakes.AdapterCheck
                 "American cars' load braking starts at Period, in the menu only with American equipment");
             var direct = typeof(Settings).GetField(nameof(Settings.DirectAdmission)).GetCustomAttributes(true).OfType<UnityModManagerNet.DrawAttribute>().SingleOrDefault();
             Check(direct == null && !Enum.IsDefined(typeof(Equipment), 2),
-                "the public build has no vacuum equipment and no DA valve setting in the menu");
+                "the public build's menu offers European and American equipment only");
         }
 
         private static void CheckPumpSteam()

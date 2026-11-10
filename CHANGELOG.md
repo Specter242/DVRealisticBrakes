@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.3.5 (2026-11-09)
+
+- Engines whose cab handles are wired to controls of their own, such as the
+  WE-4U, now get the added brake handle notches (emergency and the filling
+  stroke), the bail-off click, and the text by the crosshair.
+- Another mod's vigilance device or dead man that vents the brake pipe,
+  such as the WE-4U's, now brakes the train.
+- Fixed: with the realistic brake turned off, or an American steam engine
+  put on European equipment, its independent brake rested a quarter applied
+  until you left the cab and came back.
+- Fixed: a car's G/P lever, cut-out cock, and retainer went back to where
+  they started when the brake was turned off and on or the equipment was
+  changed.
+- Fixed: on every engine but the American steam engines, the bail-off hint
+  didn't come back after the first bail, and a bail did nothing while the
+  engine's brake was still letting go.
+- Fixed: a tender or slug uncoupled from its engine with the brake on
+  couldn't be bled.
+- Fixed: cutting an American car back in during a brake application put the
+  train into emergency.
+- Fixed: cars the game spawns on a grade could roll away before their hand
+  brakes were set.
+- Less work each frame with many parked cars.
+- If a game update stops the mod from working, it now says so in game and
+  on its settings page, where before it only left the game's own brake
+  running.
+
 ## 1.3.4 (2026-11-07)
 
 - For other mods: `RealisticBrakes.Api` now reads each car's brake pressures

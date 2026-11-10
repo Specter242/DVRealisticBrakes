@@ -5,8 +5,8 @@ namespace RealisticBrakes.Core
 {
     /// <summary>
     /// One car's air brake: its length of brake pipe and what hangs off it.
-    /// That is a valve (European, American, or vacuum) with its reservoirs and
-    /// cylinder on a car, an engine's brake on a locomotive (air or vacuum),
+    /// That is a valve of the car's equipment with its reservoirs and
+    /// cylinder on a car, an engine's brake on a locomotive,
     /// or nothing on a car that only passes the pipe through (a tender
     /// copying its engine).
     /// It outlives any one train: cars couple and uncouple, and their pipes
@@ -61,8 +61,20 @@ namespace RealisticBrakes.Core
         public LocomotiveBrake Locomotive { get; }
 
 
-        /// <summary>A leak between the car's pipe and the air (out of an air pipe, into a vacuum one), or a closed orifice for none.</summary>
+        /// <summary>A leak between the car's pipe and the air (whichever way the air runs), or a closed orifice for none.</summary>
         public Orifice PipeLeak { get; set; }
+
+        /// <summary>The outside vent's bore: a brake valve's emergency port (<see cref="DriverBrakeValveSpec.EmergencyPort"/>).</summary>
+        public static readonly Orifice OutsideVentPort = new Orifice(25.0);
+
+        /// <summary>
+        /// Whether another mod vents the pipe here (<see cref="OutsideVentWatch"/>): opened at the engine working the train
+        /// while that mod vents the game's pipe, through <see cref="OutsideVentPort"/>.
+        /// </summary>
+        public bool OutsideVent { get; set; }
+
+        /// <summary>The air the outside vent let out in the last step, kg/s.</summary>
+        public double OutsideVentFlow { get; private set; }
 
         /// <summary>The car's brake cylinder, or null when it has none of its own.</summary>
         public Chamber Cylinder => Locomotive?.Cylinder ?? Valve?.Cylinder;
@@ -89,8 +101,7 @@ namespace RealisticBrakes.Core
         public bool? BrakeValveCutOut => Locomotive?.DriverValve == null ? (bool?)null : !Locomotive.DriverValve.CutIn;
 
         /// <summary>
-        /// <paramref name="part"/>'s pressure now, gauge Pa, for the public API; NaN where the car has no such part (or, in a
-        /// test build, runs the vacuum brake).
+        /// <paramref name="part"/>'s pressure now, gauge Pa, for the public API; NaN where the car has no such part.
         /// </summary>
         public double GaugePressure(BrakePart part)
         {
@@ -147,6 +158,7 @@ namespace RealisticBrakes.Core
             Locomotive?.Step(PipeSection, dt);
             if (PipeLeak.IsOpen)
                 PipeLeak.OpenToAtmosphere(PipeSection, dt);
+            OutsideVentFlow = OutsideVent && dt > 0 ? Math.Abs(OutsideVentPort.OpenToAtmosphere(PipeSection, dt)) / dt : 0;
         }
     }
 }

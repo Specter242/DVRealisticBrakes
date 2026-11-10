@@ -130,10 +130,17 @@ namespace RealisticBrakes.Sim
                 CarLever.SetLever(air, kind, notch);
         }
 
-        /// <summary>This game's player moved <paramref name="car"/>'s <paramref name="kind"/> lever to <paramref name="notch"/>: remembered for the session as any setting is.</summary>
+        /// <summary>
+        /// This game's player moved <paramref name="car"/>'s
+        /// <paramref name="kind"/> lever to <paramref name="notch"/>:
+        /// remembered for the session as any setting is, with or without the
+        /// Multiplayer mod. Without it a rebuilt car (the model turned off and
+        /// on, the equipment changed and back, a train coupled to one left to
+        /// the game's brake) lost its levers.
+        /// </summary>
         public static void RememberLever(TrainCar car, CarLeverKind kind, int notch)
         {
-            if (Link != null && car != null)
+            if (car != null)
                 levers.GetOrCreateValue(car)[kind] = (byte)notch;
         }
 

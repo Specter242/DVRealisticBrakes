@@ -37,7 +37,8 @@ namespace RealisticBrakes.Core
         public static bool TryParse(string name, out BrakePart part)
         {
             part = default;
-            if (string.IsNullOrEmpty(name) || !char.IsLetter(name[0]))
+            // One name: Enum.TryParse would read a comma list as several, and a number as a value.
+            if (string.IsNullOrEmpty(name) || !char.IsLetter(name[0]) || name.IndexOf(',') >= 0)
                 return false;
             return Enum.TryParse(name, true, out part) && Enum.IsDefined(typeof(BrakePart), part);
         }
