@@ -45,6 +45,13 @@ The game's **Main Reservoir Fill Time** (in the session settings) speeds up
 only the engines' air pumps, as in the stock game. At the default **100 %**
 they fill ten times as fast as real ones.
 
+**A train you have just coupled needs time to charge.** Cars start with
+empty reservoirs, and they fill in real time: about five minutes for
+fifteen cars, ten for thirty. Until then the engine brakes nearly alone,
+though the pipe gauge already reads almost full. Apply the train brake
+while many of the cars are still short of air and a notice says how many;
+the pressure overlay (in the settings) shows them filling.
+
 A steam engine's air pump takes about the steam a real pump of its time
 took for the air it makes, a fifth of what the stock S282's and S060's
 pumps took, since a train's real reservoirs keep it running for minutes

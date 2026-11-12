@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.3.5"
+EDITION = "1.4.0"
 
 LEFT, RIGHT = 110, W - 144
 
@@ -278,8 +278,8 @@ CHAPTERS = [
         ("h", "1. How the Air Brake Works."),
         ("p", "Every car carries its own length of brake pipe, its own reservoirs, and its own valve. The pipe runs the length of the train and is kept charged from the engine's main reservoir, at 5 bar (about 70 lb)."),
         ("fig", air_figure, 250, "FIG. 1.—The train's air: pipe, reservoirs, valves, and cylinders."),
-        ("p", "To apply the brakes the engineman lowers the pipe: each car's valve feels the fall and lets its reservoir's air into its brake cylinder. A deeper reduction brakes harder; 1.5 bar is full service. Raising the pipe again releases the brakes."),
-        ("p", "The change runs down the train at about the speed of sound, so the rear brakes later than the front. A freight car's cylinder takes its real 18 to 30 seconds to fill, and a long train takes minutes to release and recharge."),
+        ("p", "To apply the brakes the engineman lowers the pipe: each car's valve feels the fall and lets its reservoir's air into its brake cylinder. A deeper reduction brakes harder; 1.5 bar is full service. Raising the pipe releases them."),
+        ("p", "The change runs down the train at about the speed of sound, so the rear brakes last. A freight car's cylinder takes 18 to 30 seconds to fill, a long train minutes to release and recharge. Cars newly coupled are empty of air: allow five minutes to charge fifteen, ten for thirty."),
         ("p", "A leak or a slow drift does not apply the brakes; a reduction does. A sudden fall, as from a parted train, is an emergency."),
         ("note", "Engines have their prototype's equipment, cars the setting's. Each kind has its own chapters."),
     ]),

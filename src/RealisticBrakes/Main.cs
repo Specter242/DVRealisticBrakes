@@ -113,6 +113,7 @@ namespace RealisticBrakes
             host.AddComponent<AirOverlay>();
             host.AddComponent<Notice>();
             host.AddComponent<Sim.HandBrakeHold>();
+            host.AddComponent<Controls.ChargeNotice>();
             modEntry.Logger.Log("Realistic Brakes: the model runs every brake set.");
             return true;
         }

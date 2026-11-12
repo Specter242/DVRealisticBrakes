@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 (2026-11-11)
+
+- A notice when you apply the train brake before the cars have charged, as
+  on a train you have just coupled. Cars start empty and take minutes to
+  fill, and until then the engine brakes nearly alone. The readme and the
+  booklet say how long to allow.
+
 ## 1.3.5 (2026-11-09)
 
 - Engines whose cab handles are wired to controls of their own, such as the
