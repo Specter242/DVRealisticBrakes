@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.1 (2026-11-13)
+
+- Long trains and full yards cost a little less frame time.
+- The booklet and the readme say that a retainer on LP or HP holds its
+  pressure for as long as the handle is up; only EX, or SD slowly, lets
+  it go.
+
 ## 1.4.0 (2026-11-11)
 
 - A notice when you apply the train brake before the cars have charged, as

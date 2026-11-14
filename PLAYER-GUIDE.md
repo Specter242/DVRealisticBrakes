@@ -132,7 +132,9 @@ while they recharge.
   - **European freight cars:** the G/P lever and the isolating cock.
     Coaches have the cock only.
   - **American cars:** the retaining valve (exhaust, low pressure, high
-    pressure, slow exhaust) and the cut-out cock.
+    pressure, slow exhaust) and the cut-out cock. On LP or HP the
+    cylinder comes down to 10 or 20 lb and stays there for as long as
+    the handle is up; only EX lets it go, or SD, slowly.
 
   A car with its cock closed runs unbraked.
 - **Hand brakes** give half a full application, and they hold only what

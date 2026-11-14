@@ -29,9 +29,43 @@ namespace RealisticBrakes.Sim
         private static int generation;
         private static bool stale;
 
+        // The car last found, and its air. The game asks after the same car
+        // some ten times running in its tick (each stock air method, the
+        // readouts, the heat), each a look in the weak table: about 1 µs a
+        // car a frame, 0.4 ms at 414 cars (in game, 2026-11-09 and 11-11).
+        private static BrakeSystem lastSystem;
+        private static CarAir lastAir;
+
+        // Bumped whenever a car's air is dropped or taken on: a set's airs
+        // (SetAirs) are known still to be its cars' while it stands.
+        private static int carsChanged;
+
         /// <summary>The air of the car with <paramref name="system"/>, if the model has taken it on.</summary>
-        public static bool TryGet(BrakeSystem system, out CarAir air) =>
-            cars.TryGetValue(system, out air) && air.Generation == generation;
+        public static bool TryGet(BrakeSystem system, out CarAir air)
+        {
+            if (lastAir != null && ReferenceEquals(system, lastSystem))
+            {
+                air = lastAir;
+                return air.Generation == generation;
+            }
+            if (!cars.TryGetValue(system, out air))
+                return false;
+            lastSystem = system;
+            lastAir = air;
+            return air.Generation == generation;
+        }
+
+        // Drops a car's air from the table, and from what is remembered of it.
+        private static void Drop(BrakeSystem system)
+        {
+            cars.Remove(system);
+            carsChanged++;
+            if (ReferenceEquals(system, lastSystem))
+            {
+                lastSystem = null;
+                lastAir = null;
+            }
+        }
 
         /// <summary>Re-reads every car's air on the next tick, as when the equipment setting changes.</summary>
         public static void Invalidate() => stale = true;
@@ -132,7 +166,7 @@ namespace RealisticBrakes.Sim
                 if (system != null && cars.TryGetValue(system, out var air))
                 {
                     air.RestoreForce();
-                    cars.Remove(system);
+                    Drop(system);
                 }
         }
 
@@ -152,7 +186,7 @@ namespace RealisticBrakes.Sim
             if (cars.TryGetValue(system, out var air))
                 air.RestoreForce();
             system.auxReservoirPressure = NewAuxiliaryReservoir;
-            cars.Remove(system);
+            Drop(system);
             SavedAir.Discard(system);
             Net.Forget(system);
         }
@@ -176,7 +210,8 @@ namespace RealisticBrakes.Sim
                 stale = false;
                 generation++;
             }
-            var line = LineFor(set);
+            var kept = AirsFor(set);
+            var line = kept.Line;
             var pumpSpeedUp = set.firstCar.gameParams?.CompressorProductionModifier ?? 1f;
             var pipe = line.Pipe;
             var frontOpen = Vents(set.GetEndmost(front: true));
@@ -186,13 +221,9 @@ namespace RealisticBrakes.Sim
             pipe.RearOpen = rearOpen;
             changed |= VentFromOutside(set, line, dt);
 
-            airs.Clear();
-            foreach (var system in set.cars)
-            {
-                TryGet(system, out var air);
+            var airs = kept.Airs;
+            foreach (var air in airs)
                 changed |= air.BeforeStep(pumpSpeedUp);
-                airs.Add(air);
-            }
             if (!changed && line.ChangeRate < SettledRate)
             {
                 // Standing still (parked, lapped, level): nothing to run until something changes.
@@ -218,9 +249,6 @@ namespace RealisticBrakes.Sim
         /// second, far under the 0.3 bar a minute of a leak the cars ignore.
         /// </summary>
         private const double SettledRate = 1.0;
-
-        // Reused each tick, as the game ticks hundreds of sets a frame.
-        private static readonly List<CarAir> airs = new List<CarAir>();
 
         /// <summary>
         /// The set's one stock pipe pressure, bar absolute, for code that
@@ -318,6 +346,45 @@ namespace RealisticBrakes.Sim
             return true;
         }
 
+        // A set's line and its cars' airs in the set's order, as last
+        // matched: while no car's air anywhere has been dropped or taken on
+        // since, and the set holds the same cars in the same order, they
+        // still match, with no look in the table for any car.
+        private sealed class SetAirs
+        {
+            public BrakeLine Line;
+            public BrakeSystem[] Systems;
+            public CarAir[] Airs;
+            public int Generation;
+            public int CarsChanged;
+        }
+
+        private static readonly ConditionalWeakTable<Brakeset, SetAirs> setAirs = new ConditionalWeakTable<Brakeset, SetAirs>();
+
+        private static SetAirs AirsFor(Brakeset set)
+        {
+            if (setAirs.TryGetValue(set, out var kept) && kept.Generation == generation && kept.Systems.Length == set.cars.Count
+                && lines.TryGetValue(set, out var still) && ReferenceEquals(still, kept.Line))
+            {
+                var same = true;
+                for (var i = 0; same && i < kept.Systems.Length; i++)
+                    same = ReferenceEquals(kept.Systems[i], set.cars[i]);
+                // Some car's air has changed since, perhaps one of these: looked up again.
+                if (same && kept.CarsChanged != carsChanged && Matches(kept.Line, set))
+                    kept.CarsChanged = carsChanged;
+                if (same && kept.CarsChanged == carsChanged)
+                    return kept;
+            }
+            var line = LineFor(set);
+            var airs = new CarAir[set.cars.Count];
+            for (var i = 0; i < airs.Length; i++)
+                TryGet(set.cars[i], out airs[i]);
+            setAirs.Remove(set);
+            kept = new SetAirs { Line = line, Systems = set.cars.ToArray(), Airs = airs, Generation = generation, CarsChanged = carsChanged };
+            setAirs.Add(set, kept);
+            return kept;
+        }
+
         private static BrakeLine LineFor(Brakeset set)
         {
             if (lines.TryGetValue(set, out var line) && Matches(line, set))
@@ -330,13 +397,14 @@ namespace RealisticBrakes.Sim
             {
                 if (!TryGet(system, out var air))
                 {
-                    cars.Remove(system);
+                    Drop(system);
                     // Each car's own pipe readout, which a save restores per car; the set's is an average.
                     var pipe = system.brakePipePressure > 0.5f ? system.brakePipePressure : set.pipePressure;
                     air = CarAir.Create(system, pipe, generation);
                     SavedAir.Apply(air);
                     Net.ApplyPending(air);
                     cars.Add(system, air);
+                    carsChanged++;
                 }
                 if (air.Line != null)
                     previous.Add(air.Line);

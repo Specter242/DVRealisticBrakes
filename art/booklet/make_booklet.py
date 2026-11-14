@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.4.0"
+EDITION = "1.4.1"
 
 LEFT, RIGHT = 110, W - 144
 
@@ -373,7 +373,7 @@ CHAPTERS = [
         ("h2", "Release along the Train."),
         ("p", "Cars near the engine release and recharge more slowly, so a long train lets go together, and the head end cannot rob the rear of air."),
         ("h2", "Retainers."),
-        ("p", "The retaining valve holds cylinder air through a release, to hold a train on a long grade while it recharges: EX, normal exhaust; LP, 0.7 bar (10 lb); HP, 1.4 bar (20 lb); SD, slow exhaust. A held cylinder blows down from 50 to 15 lb in 20 to 25 seconds."),
+        ("p", "The retaining valve holds cylinder air through a release, to hold a train on a long grade while it recharges: EX, normal exhaust; LP, 0.7 bar (10 lb); HP, 1.4 bar (20 lb); SD, slow exhaust. A held cylinder blows down from 50 to 15 lb in 20 to 25 seconds. On LP or HP it then stays at that pressure for as long as the handle is up: only EX lets it go, or SD, slowly."),
         ("page",),
         ("h2", "Load Braking."),
         ("p", "By default American cars have no empty/load valve, as in the steam era: every car brakes with the force sized for it empty, so a loaded train takes much longer to stop. Use the retainers on long grades. A setting gives the cars automatic empty/load instead."),
