@@ -77,3 +77,47 @@ namespace RealisticBrakes.Core.Tests;
         Assert.True(EnginePipe() > TractionCut.RecoveredAbove);
     }
 }
+
+/// <summary>
+/// A cut latched while the model ran a train it then handed to another mod's driver (UserPaddingFTW, 2026-11-15: "With the
+/// release of v1.4.2, AI traffic trains become stuck on spawn"). AI Traffic spawns a train empty, charges it, holds its
+/// train brake at half while it sets up, and puts its driver on; from then the game's own brake runs it.
+/// </summary>
+public class TractionCutHandOverTests
+{
+    private static double Bar(double gauge) => gauge * Air.Bar;
+
+    [Fact]
+    public void ACutLatchedAtSpawnStaysWhileTheBrakeIsHeldInService()
+    {
+        // The frames the model runs it: spawned empty, then charged with the brake held half on (4.25 bar on European
+        // equipment, under the 4.5 bar the cut waits for), in both styles. So the cut is still on as the driver takes over.
+        foreach (var style in new[] { TractionCutStyle.BrakePipe, TractionCutStyle.PcSwitch })
+        {
+            var cut = new TractionCut(style);
+            cut.Update(0, false, 0);
+            cut.Update(Bar(4.25), false, 0);
+            Assert.True(cut.Cut, $"{style}");
+        }
+    }
+
+    [Fact]
+    public void ACutTheModelNoLongerUpdatesNoLongerHolds()
+    {
+        var cut = new TractionCut(TractionCutStyle.BrakePipe);
+        cut.Update(0, false, 0);
+        Assert.True(cut.Holds(0));
+        Assert.True(cut.Holds(TractionCut.StaleAfter));
+        // Handed over: the model stops updating it, and the driver's throttle goes through.
+        Assert.False(cut.Holds(TractionCut.StaleAfter + 0.1));
+        Assert.False(cut.Holds(600));
+    }
+
+    [Fact]
+    public void AnUncutEngineNeverHolds()
+    {
+        var cut = new TractionCut(TractionCutStyle.BrakePipe);
+        cut.Update(Bar(5), false, 0.5);
+        Assert.False(cut.Holds(0));
+    }
+}

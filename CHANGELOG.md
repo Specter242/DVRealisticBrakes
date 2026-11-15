@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3 (2026-11-15)
+
+- Fixed: AI Traffic's trains could stay stuck where they spawned, their
+  power cut by the brakes. A train another mod drives is now left alone.
+
 ## 1.4.2 (2026-11-14)
 
 - Letting go of a long filling stroke now brings the brake pipe down over a

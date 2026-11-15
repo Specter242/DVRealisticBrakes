@@ -81,6 +81,7 @@ namespace RealisticBrakes.Sim
         public static void MarkStale(Brakeset set)
         {
             stale = true;
+            TractionCuts.ReleaseSet(set);
             foreach (var system in set.cars)
                 if (cars.TryGetValue(system, out var air))
                     air.RestoreForce();
@@ -162,6 +163,7 @@ namespace RealisticBrakes.Sim
         public static void LeaveToStock(Brakeset set)
         {
             lines.Remove(set);
+            TractionCuts.ReleaseSet(set);
             foreach (var system in set.cars)
                 if (system != null && cars.TryGetValue(system, out var air))
                 {

@@ -52,6 +52,15 @@ namespace RealisticBrakes.Core
         /// <summary>A throttle at or under this counts as closed.</summary>
         public const double ThrottleClosed = 0.001;
 
+        /// <summary>
+        /// A cut not updated for this long, s, no longer holds: the model has
+        /// stopped running the engine's brake (another mod's driver took the
+        /// train, as AI Traffic's does, or the game's own brake runs it), so
+        /// there is no pipe it can watch. UserPaddingFTW, 2026-11-15: "With
+        /// the release of v1.4.2, AI traffic trains become stuck on spawn."
+        /// </summary>
+        public const double StaleAfter = 0.5;
+
         public TractionCut(TractionCutStyle style)
         {
             Style = style;
@@ -90,6 +99,12 @@ namespace RealisticBrakes.Core
             }
             return Cut != was;
         }
+
+        /// <summary>
+        /// Whether the cut holds the throttle, <paramref name="sinceUpdate"/> s
+        /// after it was last updated: only while the model still runs it.
+        /// </summary>
+        public bool Holds(double sinceUpdate) => Cut && sinceUpdate <= StaleAfter;
 
         /// <summary>Clears the cut, as the setting is turned off or the engine is left to another mod.</summary>
         public void Clear() => Cut = false;

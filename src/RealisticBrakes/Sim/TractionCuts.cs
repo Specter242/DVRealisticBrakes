@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using LocoSim.Implementations;
 using RealisticBrakes.Core;
+using UnityEngine;
 
 namespace RealisticBrakes.Sim
 {
@@ -17,6 +18,8 @@ namespace RealisticBrakes.Sim
             public bool Foreign;
             // The equipment setting it was made under.
             public int Generation;
+            // When the model last updated it, unscaled s.
+            public float UpdatedAt;
         }
 
         // Bumped as the equipment setting changes, so each engine's style is read again.
@@ -56,6 +59,7 @@ namespace RealisticBrakes.Sim
             }
             if (engine.Cut.Style == TractionCutStyle.None || engine.Throttle == null || engine.Foreign)
                 return;
+            engine.UpdatedAt = Time.unscaledTime;
             if (Main.Settings == null || !Main.Settings.TractionCut || !Main.Active)
             {
                 if (engine.Cut.Cut)
@@ -139,8 +143,32 @@ namespace RealisticBrakes.Sim
                 ReleaseAll();
                 return;
             }
+            // The model no longer runs this engine's brake: nothing to hold the throttle for.
+            if (!engine.Cut.Holds(Time.unscaledTime - engine.UpdatedAt))
+            {
+                engine.Cut.Clear();
+                heldPorts.Remove(port);
+                return;
+            }
             engine.Asked = value;
             value = 0f;
+        }
+
+        /// <summary>
+        /// Lets the cuts of <paramref name="set"/>'s engines go, as the set is
+        /// left to the game's own brake (another mod's driver, the M62, a
+        /// failure): the model no longer watches its pipe.
+        /// </summary>
+        public static void ReleaseSet(DV.Simulation.Brake.Brakeset set)
+        {
+            if (heldPorts.Count == 0 || set == null)
+                return;
+            foreach (var system in set.cars)
+            {
+                var car = system != null ? TrainCar.Resolve(system.gameObject) : null;
+                if (car != null && engines.TryGetValue(car, out var engine) && engine.Cut.Cut)
+                    Release(car, engine, notice: false);
+            }
         }
 
         /// <summary>Lets every cut go and reads each engine's style again, as the equipment setting changes.</summary>
