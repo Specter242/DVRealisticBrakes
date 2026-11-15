@@ -82,6 +82,39 @@ namespace RealisticBrakes.Core
         /// </summary>
         public double OverchargeLetDown { get; set; } = 0.4 * Air.Bar / 240;
 
+ public double StrokeLetDown { get; set; } = 0.35 * Air.Bar;
+
+        /// <summary>
+        /// How close the pipe at the engine must come to the valve's
+        /// reference after a release from an application before the
+        /// overcharge's let-down resumes, Pa (provisional, with
+        /// <see cref="ReleaseHoldLimit"/>): within the cars' 0.05 bar release
+        /// margin, so the cars whose control reservoirs hold the overcharge
+        /// see the pipe come back to it and release fully.
+        /// </summary>
+        public double ReleaseHoldBand { get; set; } = 0.01 * Air.Bar;
+
+        /// <summary>
+        /// The longest the let-down waits for a release, s (provisional): a
+        /// pipe that never comes back to the reference, as a leaking one,
+        /// lets the overcharge down from then on.
+        /// </summary>
+        public double ReleaseHoldLimit { get; set; } = 600;
+
+        /// <summary>
+        /// Angleichen (equalizing): while its button is held in running, how
+        /// fast the valve raises the overcharge, Pa/s; 0 for a valve without
+        /// it (American). Provisional: cj187 (2026-11-14) gives only "press
+        /// and hold a button to slowly fill till 5.4-5.5 bar"; 0.02 bar/s
+        /// takes 20 s to 5.4 and 25 s to 5.5, slow enough to stop where you
+        /// want. Let go, it comes down at <see cref="OverchargeLetDown"/>, his
+        /// "each 0.1 bar takes about one minute".
+        /// </summary>
+        public double AdjustRate { get; set; } = 0.02 * Air.Bar;
+
+        /// <summary>The most Angleichen raises the pipe over running, Pa: his "5.4-5.5 bar".</summary>
+        public double AdjustLimit { get; set; } = 0.5 * Air.Bar;
+
  public bool LetsDownRelease { get; set; }
 
  public bool FillingStroke { get; set; } = true;
@@ -149,6 +182,8 @@ namespace RealisticBrakes.Core
         public static DriverBrakeValveSpec American() => new DriverBrakeValveSpec
         {
             Overcharge = 0,
+            StrokeLetDown = 0,
+            AdjustRate = 0,
             MinimumReduction = 0.45 * Air.Bar,
             LetsDownRelease = true,
             FillingStroke = false,
@@ -193,6 +228,14 @@ namespace RealisticBrakes.Core
     {
         private readonly DriverBrakeValveSpec spec;
 
+        // Whether the last step's position applied the train, and how long the overcharge's let-down has waited for a
+        // release since (NaN: not waiting).
+        private bool wasApplying;
+        // Whether the overcharge over the stroke's low-pressure overcharge is a filling stroke's surge, let down fast, rather
+        // than Angleichen's, let down slowly.
+        private bool surging;
+        private double releaseHeldFor = double.NaN;
+
         public DriverBrakeValve(DriverBrakeValveSpec spec = null)
         {
             this.spec = spec ?? new DriverBrakeValveSpec();
@@ -213,6 +256,14 @@ namespace RealisticBrakes.Core
 
         /// <summary>The overcharge still to let down, Pa.</summary>
         public double OverchargeLeft { get; private set; }
+
+        /// <summary>
+        /// Whether the Angleichen button is held: in running, the overcharge
+        /// rises at <see cref="DriverBrakeValveSpec.AdjustRate"/> to
+        /// <see cref="DriverBrakeValveSpec.AdjustLimit"/>, and isn't let down
+        /// meanwhile. Ignored on a valve without it and in other positions.
+        /// </summary>
+        public bool Adjusting { get; set; }
 
         /// <summary>The air fed into the pipe in the last step, kg/s.</summary>
         public double FeedFlow { get; private set; }
@@ -246,13 +297,21 @@ namespace RealisticBrakes.Core
 
         /// <summary>Sets the overcharge still to let down, Pa, as saved.</summary>
         public void RestoreOvercharge(double overcharge) =>
-            OverchargeLeft = Math.Max(0, Math.Min(Math.Max(spec.Overcharge, spec.LetsDownRelease ? spec.FillLimit : 0), overcharge));
+            OverchargeLeft = Math.Max(0, Math.Min(Math.Max(spec.Overcharge, spec.LetsDownRelease || spec.StrokeLetDown > 0 ? spec.FillLimit : 0), overcharge));
+
+ public void TakeOver(double pipe)
+        {
+            ChargeTo(pipe);
+            RestoreOvercharge(pipe - (Air.Atmosphere + spec.Running));
+        }
 
         /// <summary>Charges the equalizing reservoir to running, as on an engine found charged.</summary>
         public void ChargeTo(double pressure)
         {
             EqualizingReservoir.Pressure = pressure;
             OverchargeLeft = 0;
+            releaseHeldFor = double.NaN;
+            surging = false;
         }
 
         /// <summary>Advances the valve <paramref name="dt"/> s between <paramref name="mainReservoir"/> and its engine's section of <paramref name="pipe"/>.</summary>
@@ -265,6 +324,22 @@ namespace RealisticBrakes.Core
 
             var running = Air.Atmosphere + spec.Running;
             var er = EqualizingReservoir;
+            var applying = Position == DriverValvePosition.Service || Position == DriverValvePosition.Apply
+                || Position == DriverValvePosition.Emergency;
+            // Released from an application while an overcharge stands: its let-down waits until the pipe at the engine is
+            // back at the reference, so the cars that hold the overcharge in their control reservoirs see it and let go.
+            if (spec.StrokeLetDown > 0 && wasApplying && !applying && OverchargeLeft > 0)
+                releaseHeldFor = 0;
+            wasApplying = applying;
+            if (!double.IsNaN(releaseHeldFor))
+            {
+                releaseHeldFor += dt;
+                var back = pipe.Pressure >= running + OverchargeLeft - spec.ReleaseHoldBand
+                    && er.Pressure >= running + OverchargeLeft - spec.ReleaseHoldBand;
+                if (applying || back || OverchargeLeft <= 0 || releaseHeldFor > spec.ReleaseHoldLimit)
+                    releaseHeldFor = double.NaN;
+            }
+            var letDownHeld = !double.IsNaN(releaseHeldFor);
             switch (Position)
             {
                 case DriverValvePosition.Fill:
@@ -280,12 +355,41 @@ namespace RealisticBrakes.Core
                         spec.FillPort.PassOneWay(pipe, er, dt, running + spec.FillLimit);
                         OverchargeLeft = Math.Max(spec.Overcharge, Math.Min(spec.FillLimit, er.Pressure - running));
                     }
+                    else if (spec.StrokeLetDown > 0)
+                    {
+                        // The equalizing reservoir rises with the stroke, so running brings the surge down from where it
+                        // stands, at StrokeLetDown, before the overcharge comes down slowly.
+                        spec.FillPort.PassOneWay(pipe, er, dt, running + spec.FillLimit);
+                        OverchargeLeft = Math.Max(spec.Overcharge, Math.Min(spec.FillLimit, er.Pressure - running));
+                        surging = true;
+                    }
                     else
                         OverchargeLeft = spec.Overcharge;
                     break;
                 case DriverValvePosition.Running:
                 case DriverValvePosition.Holding:
-                    OverchargeLeft = Math.Max(0, OverchargeLeft - spec.OverchargeLetDown * dt);
+                    if (Adjusting && spec.AdjustRate > 0)
+                    {
+                        // Up to its limit; a stroke's surge over it still comes down as it would.
+                        if (OverchargeLeft < spec.AdjustLimit)
+                        {
+                            OverchargeLeft = Math.Min(spec.AdjustLimit, OverchargeLeft + spec.AdjustRate * dt);
+                            surging = false;
+                        }
+                        else if (OverchargeLeft > spec.AdjustLimit && spec.StrokeLetDown > 0)
+                            OverchargeLeft = Math.Max(spec.AdjustLimit, OverchargeLeft - spec.StrokeLetDown * dt);
+                        releaseHeldFor = double.NaN;
+                        break;
+                    }
+                    if (letDownHeld)
+                        break;
+                    if (surging && OverchargeLeft > spec.Overcharge && spec.StrokeLetDown > 0)
+                        OverchargeLeft = Math.Max(spec.Overcharge, OverchargeLeft - spec.StrokeLetDown * dt);
+                    else
+                    {
+                        surging = false;
+                        OverchargeLeft = Math.Max(0, OverchargeLeft - spec.OverchargeLetDown * dt);
+                    }
                     break;
                 case DriverValvePosition.Lap when spec.LetsDownRelease:
                     // Lapped, an overcharge stands with the equalizing reservoir, and running lets it down from there.
@@ -294,6 +398,13 @@ namespace RealisticBrakes.Core
                 default:
                     if (spec.LetsDownRelease)
                         OverchargeLeft = 0;
+                    // A stroke's surge still coming down goes at once: a reduction is made from the overcharge the cars'
+                    // control reservoirs hold, not from above it.
+                    else if (spec.StrokeLetDown > 0)
+                    {
+                        OverchargeLeft = Math.Min(OverchargeLeft, spec.Overcharge);
+                        surging = false;
+                    }
                     break;
             }
 

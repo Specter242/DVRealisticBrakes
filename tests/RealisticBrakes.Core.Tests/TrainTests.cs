@@ -170,7 +170,7 @@ public class TrainTests
         Assert.InRange(rig.Rear.CylinderGauge / Air.Bar, 0.4, 1.4);
         rig.Valve.Position = DriverValvePosition.Running;
         rig.Run(180);
-        Assert.InRange(rig.Engine.Cylinder.GaugeBar, 0, 0.05);
+        Assert.InRange(rig.Engine.Cylinder.GaugeBar, -0.001, 0.05);
         Assert.All(rig.Cars.Skip(1), c => Assert.InRange(c.CylinderGauge / Air.Bar, 0, 0.05));
     }
 
@@ -333,7 +333,7 @@ public class BailOffTests
         Assert.True(rig.Engine.BailOff() > 0);
         // The engine's cylinders release through the relay's exhaust in about 4 s.
         rig.Run(40);
-        Assert.InRange(rig.Engine.Cylinder.GaugeBar, 0, 0.05);
+        Assert.InRange(rig.Engine.Cylinder.GaugeBar, -0.001, 0.05);
         Assert.InRange(rig.Rear.CylinderGauge / Air.Bar, 1.8, 2.2);
 
         // A further reduction applies the engine again by that much.

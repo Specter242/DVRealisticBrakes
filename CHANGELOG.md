@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.2 (2026-11-14)
+
+- Letting go of a long filling stroke now brings the brake pipe down over a
+  couple of seconds instead of at once; the overcharge it leaves still comes
+  down over about four minutes.
+- Fixed: a brake made soon after a filling stroke could leave the cars
+  nearest the engine dragging after the release. The brake valve now holds
+  the overcharge until every car has let go.
+- New Angleichen key for European brake valves, unbound until you set it in
+  the settings: hold it to raise the brake pipe slowly to at most 5.5 bar,
+  to free brakes that stick at 5.0; let go, it comes down at 0.1 bar a
+  minute.
+- Diesels and electrics now lose power when the brakes call for it:
+  European engines while the brake pipe is under 3.5 bar, American ones when
+  their PC switch opens on an emergency. Power returns once the pipe has
+  recharged and the throttle is closed. On by default; the "Power cut by the
+  brakes" setting turns it off.
+- Fixed: switching the brake equipment setting while the brake pipe was
+  overcharged could leave the engine and the cars dragging until a full
+  brake and release.
+
 ## 1.4.1 (2026-11-13)
 
 - Long trains and full yards cost a little less frame time.

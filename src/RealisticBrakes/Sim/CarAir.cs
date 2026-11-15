@@ -122,7 +122,8 @@ namespace RealisticBrakes.Sim
                 // The distributor's cylinder is the relay's pilot: it starts where the engine's cylinders stand, so they hold as they were.
                 engine.Cylinder.Pressure = Pa(Mathf.Max(1f, system.brakeCylinderPressureUnsmoothed));
                 engine.Distributor.Restore(Pa(system.controlReservoirPressure), Mathf.Max(system.auxReservoirPressure, pipePressure) * Air.Bar, engine.Cylinder.Pressure, pipe);
-                engine.DriverValve?.ChargeTo(pipe);
+                // The valve takes the pipe over where it stands, an overcharge kept to let down slowly (DriverBrakeValve.TakeOver).
+                engine.DriverValve?.TakeOver(pipe);
             }
             else if (system.brakeCylinderPressureCalculation == BrakeSystem.BrakeCylinderPressureCalculation.Regular)
             {
@@ -151,6 +152,17 @@ namespace RealisticBrakes.Sim
             return new CarAir(system, car, brake, generation, RiggingFor(car));
         }
 
+
+        /// <summary>Whether <paramref name="car"/> is a steam engine: one with a boiler, stock or Custom Car Loader.</summary>
+        internal static bool IsSteam(TrainCar car)
+        {
+            var flow = car != null && car.SimController != null ? car.SimController.SimulationFlow : null;
+            if (flow != null)
+                foreach (var component in flow.OrderedSimComps)
+                    if (component is Boiler)
+                        return true;
+            return car != null && car.carLivery != null && CarTypes.IsSteamLocomotive(car.carLivery);
+        }
 
  internal static bool IsAmericanEngine(TrainCar car)
         {
@@ -368,6 +380,7 @@ namespace RealisticBrakes.Sim
             if (valve != null)
             {
                 valve.CutIn = bs.trainBrakeCutout;
+                valve.Adjusting = Controls.AdjustKey.Held(Car);
                 var handle = bs.trainBrakePosition;
                 // A widened handle's added notches: a diesel's filling stroke or a steam engine's release (the H-6's), main reservoir air straight into the pipe; a diesel's emergency.
                 // A diesel's handle widened before a switch to American equipment, or another player's, keeps its stroke's notch: the 26-L has none, so it reads as release.

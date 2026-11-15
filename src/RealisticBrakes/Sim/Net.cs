@@ -20,6 +20,9 @@ namespace RealisticBrakes.Sim
 
         /// <summary>A widened train brake handle's added notches: the value the <see cref="HandleZone"/>.</summary>
         HandleZone = 4,
+
+        /// <summary>The Angleichen key held on an engine, or let go: the value 1 or 0. An older build ignores it.</summary>
+        Adjust = 5,
     }
 
     /// <summary>One player's action on a car, to be done the same everywhere.</summary>
@@ -107,6 +110,10 @@ namespace RealisticBrakes.Sim
                         break;
                     case NetActionKind.HandleZone:
                         TrainBrakeHandle.SetRemoteZone(car, (HandleZone)action.Value, own ? TrainBrakeHandle.LocalHand : player);
+                        break;
+                    case NetActionKind.Adjust:
+                        if (!own)
+                            AdjustKey.SetHold(car, player, action.Value != 0);
                         break;
                 }
             }

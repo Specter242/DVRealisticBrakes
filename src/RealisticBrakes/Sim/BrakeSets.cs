@@ -232,6 +232,7 @@ namespace RealisticBrakes.Sim
                     air.Rest();
                     air.Handled = true;
                 }
+                TractionCuts.Update(airs);
                 return;
             }
             line.Advance(dt);
@@ -241,6 +242,7 @@ namespace RealisticBrakes.Sim
                 air.Handled = true;
             }
             set.pipePressure = SetPressure(set, line);
+            TractionCuts.Update(airs);
         }
 
         /// <summary>

@@ -260,6 +260,14 @@ page, or a tab down its edge, to turn to that chapter.
 - **Click to bail off:** on by default.
 - **Bail-off key:** unbound until you set it. It bails off the engine
   you're on, as the click does, even with the click turned off.
+- **Angleichen key** (European brake valves): unbound until you set it.
+  Held, it raises the brake pipe slowly, to at most 5.5 bar, to free car
+  brakes that stick at 5.0; let go, it comes down at 0.1 bar a minute.
+- **Power cut by the brakes** (on by default): a diesel or electric loses
+  power while a European engine's brake pipe is under 3.5 bar, or once an
+  American engine's PC switch opens on an emergency. The throttle drops to
+  idle; power comes back once the pipe has recharged (over 4.5 bar) and
+  the throttle is closed. Steam engines aren't affected.
 - **Brake controls' text** by the crosshair: on by default. It covers
   the notices after a bail-off or the booklet button too; off, they go to
   the log only. A warning that a multiplayer host runs another version

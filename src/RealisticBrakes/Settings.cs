@@ -62,6 +62,12 @@ namespace RealisticBrakes
         [Draw("Bail-off key: bails off the engine you're on, as the click does (unbound until you set it)")]
         public KeyBinding BailOffKey = new KeyBinding();
 
+        [Draw("Angleichen key (European brake valves): while held on the engine you're on, slowly raises the brake pipe to at most 5.5 bar, to free brakes that stick at 5.0; let go, it comes down at 0.1 bar a minute (unbound until you set it)")]
+        public KeyBinding AdjustKey = new KeyBinding();
+
+        [Draw("Power cut by the brakes on diesels and electrics: European engines lose power while the brake pipe is under 3.5 bar, American ones when their PC switch opens on an emergency. Power comes back once the pipe has recharged and the throttle is closed")]
+        public bool TractionCut = true;
+
         [Draw("Looking at an engine's train brake, independent brake, or brake valve cut-out, or a car's brake levers, shows where it stands by the crosshair (not in VR); bailing off and the booklet button show a notice. Off, the notices go to the log only")]
         public bool ShowValveText = true;
 
@@ -105,7 +111,10 @@ namespace RealisticBrakes
                 drawnEquipment = Equipment;
                 drawnEveryEngine = EveryEngineUsesSetting;
                 Sim.BrakeSets.Invalidate();
+                Sim.TractionCuts.Reset();
             }
+            if (!Enabled || !TractionCut)
+                Sim.TractionCuts.ReleaseAll();
             var levers = (Enabled, Equipment, ManualEmptyLoaded, BrakeForceFromCar);
             if (levers != drawnLevers)
             {
