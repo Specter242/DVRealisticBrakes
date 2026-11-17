@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.4 (2026-11-17)
+
+- The settings are grouped under Brake model, Cab, Display, and Keys, with
+  short names. Hover over a setting's "?" for what it does.
+
 ## 1.4.3 (2026-11-15)
 
 - Fixed: AI Traffic's trains could stay stuck where they spawned, their

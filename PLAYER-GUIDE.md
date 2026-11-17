@@ -176,9 +176,9 @@ brake valve with holding and the S-6 independent, and the diesels the 26-L.
 The stock diesels and the BR95 are **European**.
 
 The brake equipment setting chooses the cars' equipment, all of them, and
-that of any engine not named here. **European** is the default. A box
-under it, "Every engine uses the brake equipment above", puts every engine
-on the setting instead. Any engine's brake valve works any car, as both
+that of any engine not named here. **European** is the default. The
+setting under it, "Every engine uses this equipment", puts every engine on
+it instead. Any engine's brake valve works any car, as both
 kinds work off the same 5 bar pipe.
 
 - **European (UIC distributors):**
@@ -241,40 +241,55 @@ page, or a tab down its edge, to turn to that chapter.
 
 ## Settings
 
+In the mod's settings window, in four groups. Hover over a setting's "?"
+for what it does.
+
+**Brake model**
+
 - **Run the realistic brake:** off gives the game's own brake back at once,
   from the pressures this one left.
 - **Brake equipment:** European or American, for the cars and for the
   engines whose own isn't known.
-- **Every engine uses the brake equipment above:** off by default, so each
-  engine has its own prototype's equipment; on, every engine uses the
-  setting.
-- **Brake force from the car:** loaded and empty cars stop differently.
-- **American cars' load braking:** Period (no empty/load valve, the
-  default) or EmptyLoad (automatic). Shown with American equipment.
+- **Every engine uses this equipment:** off by default, so each engine has
+  its own prototype's equipment; on, every engine uses the setting.
+- **American freight cars' braking for their load:** Period (no
+  empty/load valve, the default) or EmptyLoad (automatic). Shown with
+  American equipment.
+- **Freight cars brake with their own force:** loaded and empty cars stop
+  differently.
 - **Freight cars' G/P lever** as cars come into service.
-- **Train brake handles' added notches:** the diesels' filling stroke and
-  emergency, and the steam engines' release (and holding, on American
-  engines). On by default; it takes effect as a cab loads.
-- **Equalizing reservoir hand** on the steam engines' main reservoir
-  gauge: on by default; it takes effect as a cab loads.
-- **Click to bail off:** on by default.
-- **Bail-off key:** unbound until you set it. It bails off the engine
-  you're on, as the click does, even with the click turned off.
-- **Angleichen key** (European brake valves): unbound until you set it.
-  Held, it raises the brake pipe slowly, to at most 5.5 bar, to free car
-  brakes that stick at 5.0; let go, it comes down at 0.1 bar a minute.
 - **Power cut by the brakes** (on by default): a diesel or electric loses
   power while a European engine's brake pipe is under 3.5 bar, or once an
   American engine's PC switch opens on an emergency. The throttle drops to
   idle; power comes back once the pipe has recharged (over 4.5 bar) and
   the throttle is closed. Steam engines aren't affected.
-- **Brake controls' text** by the crosshair: on by default. It covers
+
+**Cab**
+
+- **Train brake handles gain notches:** the diesels' filling stroke and
+  emergency, and the steam engines' release (and holding, on American
+  engines). On by default; it takes effect as a cab loads.
+- **Click the independent brake to bail off:** on by default.
+- **Equalizing reservoir hand** on the steam engines' main reservoir
+  gauge: on by default; it takes effect as a cab loads.
+
+**Display**
+
+- **Brake handle positions by the crosshair:** on by default. It covers
   the notices after a bail-off or the booklet button too; off, they go to
   the log only. A warning that a multiplayer host runs another version
   still shows.
-- **Show each car's brake pressures** (off by default): an overlay for the train you're on:
+- **Brake pressure overlay** (off by default): for the train you're on:
   pipe, control (or, on American cars, emergency) reservoir, auxiliary
   reservoir, and cylinder, in gauge bar.
+
+**Keys**
+
+- **Bail-off key:** unbound until you set it. It bails off the engine
+  you're on, as the click does, even with the click turned off.
+- **Angleichen key** (European brake valves): unbound until you set it.
+  Held, it raises the brake pipe slowly, to at most 5.5 bar, to free car
+  brakes that stick at 5.0; let go, it comes down at 0.1 bar a minute.
 
 ## Compatibility
 

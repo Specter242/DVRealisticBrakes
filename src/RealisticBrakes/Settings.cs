@@ -1,4 +1,5 @@
 using RealisticBrakes.Core;
+using UnityEngine;
 using UnityModManagerNet;
 
 namespace RealisticBrakes
@@ -25,54 +26,64 @@ namespace RealisticBrakes
         EmptyLoad,
     }
 
+    // The settings, in the order the mod's window and the Comms Tablet show them: the brake model, the cab, the display,
+    // and the keys last. Labels stay short; the rest is each one's tooltip. Moving a field doesn't break a saved
+    // Settings.xml, which is read by name; renaming one does.
     public class Settings : UnityModManager.ModSettings, IDrawable
     {
-        [Draw("Run the realistic brake (off: the game's own brake runs, from the pressures this one left)")]
+        // The model settings a multiplayer host gives its guests (Sim.Net.ModelSettings) say so in their tooltips.
+        private const string HostApplies = "\nIn multiplayer, the host's setting is used.";
+
+        [Header("Brake model")]
+        [Draw("Run the realistic brake", Tooltip = "Off: the game's own brake runs, from the pressures this one left." + HostApplies)]
         public bool Enabled = true;
 
-        [Draw("Brake equipment for the cars, and for the engines whose own isn't known (or every engine, with the box below): European (UIC distributors, graduated release, G/P; the engines keep a self-lapping independent) or American (AB valves, direct release, retainers, emergency reservoirs; the steam engines and DM3 get the E-T, its H-6 brake valve and S-6 independent, the diesels the 26-L). Changing it re-reads every car", DrawType.ToggleGroup)]
+        [Draw("Brake equipment", DrawType.ToggleGroup, Tooltip = "For the cars, and for the engines whose own isn't known (or every engine, with\nthe setting below). European: UIC distributors, graduated release, G/P; the\nengines keep a self-lapping independent. American: AB valves, direct release,\nretainers, emergency reservoirs; the steam engines and DM3 get the E-T, its H-6\nbrake valve and S-6 independent, the diesels the 26-L. Changing it re-reads\nevery car." + HostApplies)]
         public Equipment Equipment = Equipment.European;
+
+        [Draw("Every engine uses this equipment", Tooltip = "Off: each engine has its own prototype's: the S282, S060, and the American\ncustom engines American, the stock diesels and the BR95 European, the rest the\nsetting. The cars always use the setting." + HostApplies)]
+        public bool EveryEngineUsesSetting;
 
         // Synced in multiplayer whatever the build, so the session's packets read alike.
         public bool DirectAdmission = true;
 
-        [Draw("Every engine uses the brake equipment above. Off, each engine has its own prototype's: the S282, S060, and the American custom engines American, the stock diesels and the BR95 European, the rest the setting. The cars always use the setting")]
-        public bool EveryEngineUsesSetting;
-
-        [Draw("Freight cars brake with their own force, not their load's: a loaded car stops slower than an empty one, and each car's empty/loaded valve, set from its load, matters")]
-        public bool BrakeForceFromCar = true;
-
-        [Draw("American freight cars' braking for their load: Period (no empty/load equipment, as in the steam era: every car brakes with its empty force, so a loaded train stops much slower; hold it on grades with the retainers) or EmptyLoad (automatic empty/load equipment, as on modern heavy cars)", DrawType.ToggleGroup, VisibleOn = "Equipment|American")]
+        [Draw("American freight cars' braking for their load", DrawType.ToggleGroup, VisibleOn = "Equipment|American", Tooltip = "Period: no empty/load equipment, as in the steam era: every car brakes with its\nempty force, so a loaded train stops much slower; hold it on grades with the\nretainers. EmptyLoad: automatic empty/load equipment, as on modern heavy cars." + HostApplies)]
         public LoadBraking LoadBraking = LoadBraking.Period;
 
-        [Draw("Freight cars' G/P lever as they come into service (passenger coaches and engines run in P)", DrawType.ToggleGroup)]
+        [Draw("Freight cars brake with their own force", Tooltip = "Not their load's: a loaded car stops slower than an empty one, and each car's\nempty/loaded valve, set from its load, matters." + HostApplies)]
+        public bool BrakeForceFromCar = true;
+
+        [Draw("Freight cars' G/P lever as they come into service", DrawType.ToggleGroup, Tooltip = "Passenger coaches and engines run in P." + HostApplies)]
         public BrakingMode FreightMode = BrakingMode.Goods;
 
         public bool ManualEmptyLoaded;
 
-        [Draw("Train brake handles gain notches: on diesels, a filling stroke past release (held 0.4 s; it springs back when you let go) and emergency past full service; on steam engines, release before running, which stays, and with American equipment the H-6's holding after running. Takes effect as a cab loads")]
-        public bool WidenTrainBrakeHandles = true;
-
-        [Draw("Steam engines' main reservoir gauge gains the equalizing reservoir's hand (blue; the main reservoir's turns red). Takes effect as a cab loads")]
-        public bool EqualizingHand = true;
-
-        [Draw("Click the independent brake lever to bail off (in VR, hold it and press the trigger): the engine's own brakes release from a train brake application, the train's stay on")]
-        public bool ClickToBailOff = true;
-
-        [Draw("Bail-off key: bails off the engine you're on, as the click does (unbound until you set it)")]
-        public KeyBinding BailOffKey = new KeyBinding();
-
-        [Draw("Angleichen key (European brake valves): while held on the engine you're on, slowly raises the brake pipe to at most 5.5 bar, to free brakes that stick at 5.0; let go, it comes down at 0.1 bar a minute (unbound until you set it)")]
-        public KeyBinding AdjustKey = new KeyBinding();
-
-        [Draw("Power cut by the brakes on diesels and electrics: European engines lose power while the brake pipe is under 3.5 bar, American ones when their PC switch opens on an emergency. Power comes back once the pipe has recharged and the throttle is closed")]
+        [Draw("Power cut by the brakes on diesels and electrics", Tooltip = "European engines lose power while the brake pipe is under 3.5 bar, American ones\nwhen their PC switch opens on an emergency. Power comes back once the pipe has\nrecharged and the throttle is closed.")]
         public bool TractionCut = true;
 
-        [Draw("Looking at an engine's train brake, independent brake, or brake valve cut-out, or a car's brake levers, shows where it stands by the crosshair (not in VR); bailing off and the booklet button show a notice. Off, the notices go to the log only")]
+        [Header("Cab")]
+        [Draw("Train brake handles gain notches", Tooltip = "On diesels, a filling stroke past release (held 0.4 s; it springs back when you\nlet go) and emergency past full service; on steam engines, release before\nrunning, which stays, and with American equipment the H-6's holding after\nrunning. Takes effect as a cab loads." + HostApplies)]
+        public bool WidenTrainBrakeHandles = true;
+
+        [Draw("Click the independent brake to bail off", Tooltip = "In VR, hold the lever and press the trigger. The engine's own brakes release\nfrom a train brake application; the train's stay on.")]
+        public bool ClickToBailOff = true;
+
+        [Draw("Equalizing reservoir hand on steam engines' gauge", Tooltip = "The main reservoir gauge gains the equalizing reservoir's hand, blue; the main\nreservoir's turns red. Takes effect as a cab loads.")]
+        public bool EqualizingHand = true;
+
+        [Header("Display")]
+        [Draw("Brake handle positions by the crosshair", Tooltip = "Looking at an engine's train brake, independent brake, or brake valve cut-out,\nor a car's brake levers, shows where it stands (not in VR). Bailing off and the\nbooklet button show a notice. Off, the notices go to the log only.")]
         public bool ShowValveText = true;
 
-        [Draw("Show each car's brake pressures for the train you're on")]
+        [Draw("Brake pressure overlay", Tooltip = "A box on the screen with each car's brake pressures, for the train you're on.")]
         public bool ShowOverlay;
+
+        [Header("Keys")]
+        [Draw("Bail-off key", Tooltip = "Bails off the engine you're on, as the click does. Unbound until you set it.")]
+        public KeyBinding BailOffKey = new KeyBinding();
+
+        [Draw("Angleichen key (European brake valves)", Tooltip = "While held on the engine you're on, slowly raises the brake pipe to at most\n5.5 bar, to free brakes that stick at 5.0; let go, it comes down at 0.1 bar a\nminute. Unbound until you set it.")]
+        public KeyBinding AdjustKey = new KeyBinding();
 
 
         public override void Save(UnityModManager.ModEntry modEntry)
