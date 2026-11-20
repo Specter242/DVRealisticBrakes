@@ -16,11 +16,11 @@ namespace RealisticBrakes.Controls
         private const string Red = "#BF140D";
         private const string Blue = "#1A59D9";
         // The game's red cylinder hand (the S282's NeedleRed material).
-        private const string CylinderRed = "#B53D32";
+        internal const string CylinderRed = "#B53D32";
         private static readonly Color Ink = new Color(0.1f, 0.09f, 0.08f);
 
         // The added hand sits this far behind the stock one, m, as the game's own second hand does (the cylinder's, behind the pipe's).
-        private const float HandOffset = 0.0015f;
+        internal const float HandOffset = 0.0015f;
 
         private const float LegendDrop = 0.72f;
         private const float LegendHeight = 0.15f;
@@ -30,7 +30,10 @@ namespace RealisticBrakes.Controls
         private const float LegendDepth = 0.0005f;
 
         // Two gauges whose pivots are closer than this, m, share a dial.
-        private const float SameDial = 0.002f;
+        internal const float SameDial = 0.002f;
+
+        /// <summary>The name of a dial's legend, under its gauge.</summary>
+        internal const string LegendName = "RealisticBrakes legend";
 
         private static Material redMaterial;
         private static Material blueMaterial;
@@ -42,9 +45,18 @@ namespace RealisticBrakes.Controls
             if (system == null || system.selfLappingController || !system.hasTrainBrake || !system.hasCompressor)
                 return;
             var mainReservoir = Gauge<IndicatorMainResReader>(cab);
-            if (mainReservoir == null || mainReservoir.transform.parent == null
-                || mainReservoir.transform.parent.GetComponentInChildren<EqualizingHand>(true) != null)
+            if (mainReservoir == null || mainReservoir.transform.parent == null || cab.GetComponentInChildren<EqualizingHand>(true) != null)
                 return;
+
+            var own = OwnEqualizingHand(cab, mainReservoir);
+            if (own != null)
+            {
+                var drives = own.gameObject.AddComponent<EqualizingHand>();
+                drives.Gauge = own;
+                drives.System = system;
+                drives.Reader = own.GetComponent<IndicatorBrakePipeReader>();
+                return;
+            }
 
             var copy = Object.Instantiate(mainReservoir.gameObject, mainReservoir.transform.parent, false);
             copy.name = "I_EqualizingReservoir";
@@ -59,7 +71,7 @@ namespace RealisticBrakes.Controls
             driver.System = system;
 
             var font = Font(cab);
-            if (font == null)
+            if (font == null || !GameOwn(car))
                 return;
             Legend(mainReservoir, font, $"<color={Red}>MR</color>/<color={Blue}>ER</color>");
             var pipe = Gauge<IndicatorBrakePipeReader>(cab);
@@ -68,6 +80,26 @@ namespace RealisticBrakes.Controls
                 Legend(pipe, font, $"BP/<color={CylinderRed}>BC</color>");
         }
 
+        /// <summary>
+        /// The equalizing reservoir hand <paramref name="mainReservoir"/>'s dial came with, if any: a second hand on its pivot,
+        /// read from the brake pipe (the game has no reader for the equalizing reservoir), while another dial shows the pipe.
+        /// A dial with the main reservoir and the pipe and nothing else to show the pipe keeps its hands as they are. Readers
+        /// on hands with no mesh, kept for other mods to read (the DE4-740B's, job 2702), show nothing and don't count.
+        /// </summary>
+        private static IndicatorGauge OwnEqualizingHand(Component cab, IndicatorGauge mainReservoir)
+        {
+            var pivot = mainReservoir.needle.position;
+            var pipes = cab.GetComponentsInChildren<IndicatorBrakePipeReader>(true)
+                .Select(r => r.GetComponent<IndicatorGauge>())
+                .Where(g => g != null && g.needle != null && g.needle.GetComponentsInChildren<MeshFilter>(true).Any(f => f.sharedMesh != null))
+                .ToList();
+            var own = pipes.FirstOrDefault(g => Vector3.Distance(g.needle.position, pivot) < SameDial);
+            return own != null && pipes.Any(g => Vector3.Distance(g.needle.position, pivot) >= SameDial) ? own : null;
+        }
+
+        /// <summary>Whether <paramref name="car"/> is one of the game's own engines, not a Custom Car Loader engine (its own livery type).</summary>
+        private static bool GameOwn(TrainCar car) => car.carLivery != null && car.carLivery.GetType() == typeof(DV.ThingTypes.TrainCarLivery);
+
         private static IndicatorGauge Gauge<TReader>(Component cab) where TReader : AIndicatorBrakePressureReader =>
             cab.GetComponentsInChildren<TReader>(true)
                 .Select(r => r.GetComponent<IndicatorGauge>())
@@ -75,16 +107,16 @@ namespace RealisticBrakes.Controls
 
         // Toward the viewer, in the gauge's frame: the hands turn clockwise to them, positively about the rotation axis,
         // which in Unity's left-handed frame is clockwise seen from the axis's tip (the mirrored legend, 2026-10-27).
-        private static Vector3 Toward(IndicatorGauge gauge) => gauge.rotationAxis.normalized;
+        internal static Vector3 Toward(IndicatorGauge gauge) => gauge.rotationAxis.normalized;
 
-        private static void Paint(IndicatorGauge gauge, Material material)
+        internal static void Paint(IndicatorGauge gauge, Material material)
         {
             foreach (var renderer in gauge.needle.GetComponentsInChildren<Renderer>(true))
                 renderer.sharedMaterial = material;
         }
 
         // The stock hands use the shared gauge atlas and its occlusion map: a plain material keeps the color from darkening, as Realistic Firing's do.
-        private static Material RedHandMaterial() => redMaterial != null ? redMaterial : redMaterial = HandMaterial("RealisticBrakes main reservoir hand", RedHand);
+        internal static Material RedHandMaterial() => redMaterial != null ? redMaterial : redMaterial = HandMaterial("RealisticBrakes main reservoir hand", RedHand);
 
         private static Material BlueHandMaterial() => blueMaterial != null ? blueMaterial : blueMaterial = HandMaterial("RealisticBrakes equalizing reservoir hand", BlueHand);
 
@@ -96,7 +128,7 @@ namespace RealisticBrakes.Controls
         }
 
         // The cab's own label font, or TextMeshPro's default.
-        private static TextMeshPro Font(Component cab) =>
+        internal static TextMeshPro Font(Component cab) =>
             cab.GetComponentsInChildren<TextMeshPro>(true).FirstOrDefault(t => t.font != null);
 
         // A legend below the pivot, upright on the dial: the hand at mid-sweep points to the dial's top.
@@ -116,7 +148,7 @@ namespace RealisticBrakes.Controls
                 return;
             up /= length;
 
-            var go = new GameObject("RealisticBrakes legend");
+            var go = new GameObject(LegendName);
             go.transform.SetParent(gauge.transform, false);
             var tmp = go.AddComponent<TextMeshPro>();
             tmp.font = font.font;
@@ -142,7 +174,7 @@ namespace RealisticBrakes.Controls
         }
 
         // The hand's tip: the far end of its mesh along its longest axis (Realistic Firing's StokerGauges).
-        private static Vector3 NeedleTip(Transform pivot)
+        internal static Vector3 NeedleTip(Transform pivot)
         {
             var filter = pivot.GetComponentInChildren<MeshFilter>(true);
             if (filter == null || filter.sharedMesh == null)
@@ -155,12 +187,21 @@ namespace RealisticBrakes.Controls
         }
     }
 
-    /// <summary>Moves the equalizing reservoir's hand, absolute bar as the stock gauges read, and hides it while the model is off.</summary>
+    /// <summary>
+    /// Moves the equalizing reservoir's hand, absolute bar as the stock gauges read. While the model is off, an added hand
+    /// is hidden, and a dial's own hand goes back to its reader.
+    /// </summary>
     internal sealed class EqualizingHand : MonoBehaviour
     {
         public IndicatorGauge Gauge { get; set; }
 
         public BrakeSystem System { get; set; }
+
+        /// <summary>The reader of a hand the dial came with, stood down while the model drives it; null for a hand this mod added.</summary>
+        public Behaviour Reader { get; set; }
+
+        /// <summary>Whether this mod added the hand, a copy of the main reservoir's.</summary>
+        public bool Added => Reader == null;
 
         private Renderer[] renderers;
         private bool shown = true;
@@ -170,9 +211,21 @@ namespace RealisticBrakes.Controls
             if (Gauge == null)
                 return;
             var valve = Main.Active && BrakeSets.TryGet(System, out var air) ? air.Brake.Locomotive?.DriverValve : null;
-            Show(valve != null);
+            if (Reader != null)
+            {
+                if (Reader.enabled != (valve == null))
+                    Reader.enabled = valve == null;
+            }
+            else
+                Show(valve != null);
             if (valve != null)
                 Gauge.Value = (float)Air.ToAbsoluteBar(valve.EqualizingReservoir.Pressure);
+        }
+
+        private void OnDestroy()
+        {
+            if (Reader != null)
+                Reader.enabled = true;
         }
 
         private void Show(bool show)

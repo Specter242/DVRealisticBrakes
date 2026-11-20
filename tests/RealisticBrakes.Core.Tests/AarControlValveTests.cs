@@ -207,6 +207,80 @@ public class AarControlValveTests
 /// <summary>Trains of American cars.</summary>
 public class AarTrainTests
 {
+    private static double Gauge(Chamber c) => Air.ToGaugeBar(c.Pressure);
+
+    [Theory]
+    [InlineData(60, 40, 3)]
+    [InlineData(90, 40, 3)]
+    [InlineData(90, 10, 1)]
+    [InlineData(180, 120, 3)]
+    public void CarsLetGoAfterTheCocksReopenOnAPartChargedTrain(double charging, double closed, int cut)
+    {
+        // Reopened, the cut's lower pipe dips the rest, which apply on it and take almost nothing from their reservoirs:
+        // the pipe could then never stand 0.1 bar over them, and they dragged at 0.6 bar for good (2026-11-18).
+        var rig = new Rig(6, american: true, charged: false);
+        rig.Run(charging);
+        var head = rig.Cars.Take(rig.Cars.Count - cut).ToList();
+        var tail = rig.Cars.Skip(rig.Cars.Count - cut).ToList();
+        var front = new BrakeLine(head, Rig.Geometry, null, new[] { rig.Line });
+        var rear = new BrakeLine(tail, Rig.Geometry, null, new[] { rig.Line });
+        void Pump() => rig.Engine.CompressorFlow = Air.ToAbsoluteBar(rig.Engine.MainReservoir.Pressure) < 8.6 ? Rig.FreeAir(Rig.CompressorRate) : 0;
+        for (var t = 0.0; t < closed; t += Rig.Frame)
+        {
+            Pump();
+            front.Advance(Rig.Frame);
+            rear.Advance(Rig.Frame);
+        }
+        var whole = new BrakeLine(rig.Cars, Rig.Geometry, null, new[] { front, rear });
+        for (var t = 0.0; t < 120; t += Rig.Frame)
+        {
+            Pump();
+            whole.Advance(Rig.Frame);
+        }
+        Assert.All(rig.Cars.Skip(1), c =>
+        {
+            Assert.False(c.ControlValve!.Applied);
+            Assert.InRange(Gauge(c.Cylinder), -0.01, 0.02);
+        });
+    }
+
+    [Fact]
+    public void ABrakeHoldsWhileThePipeStaysDownAndLetsGoWhenItComesBack()
+    {
+        var valve = new AarControlValve();
+        valve.ChargeTo(Air.FromGaugeBar(5));
+        var pipe = new Chamber(0.02, Air.FromGaugeBar(5));
+        void Hold(double bar, double seconds)
+        {
+            for (var t = 0.0; t < seconds; t += 0.004)
+            {
+                pipe.Pressure = Air.FromGaugeBar(bar);
+                valve.Step(pipe, 0.004);
+            }
+        }
+        Hold(4.85, 3);
+        Assert.True(valve.Applied);
+        Hold(4.95, 30);
+        Assert.True(valve.Applied, "released with the pipe still under where it stood");
+        Hold(5.0, 3);
+        Assert.False(valve.Applied);
+    }
+
+    [Fact]
+    public void ARestoredBrakeWaitsForAFullRiseOverItsReservoir()
+    {
+        // Where the reservoir stood when it applied isn't saved.
+        var valve = new AarControlValve();
+        valve.Restore(Air.FromGaugeBar(4.5), Air.FromGaugeBar(5), Air.FromGaugeBar(1.5), Air.FromGaugeBar(4.5));
+        var pipe = new Chamber(0.02, Air.FromGaugeBar(4.55));
+        for (var t = 0.0; t < 5; t += 0.004)
+        {
+            pipe.Pressure = Air.FromGaugeBar(4.55);
+            valve.Step(pipe, 0.004);
+        }
+        Assert.True(valve.Applied);
+    }
+
     [Fact]
     public void AnEmergencyRunsDownTheTrainAtAbout900FeetASecond()
     {

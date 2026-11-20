@@ -68,8 +68,9 @@ namespace RealisticBrakes
         [Draw("Click the independent brake to bail off", Tooltip = "In VR, hold the lever and press the trigger. The engine's own brakes release\nfrom a train brake application; the train's stay on.")]
         public bool ClickToBailOff = true;
 
-        [Draw("Equalizing reservoir hand on steam engines' gauge", Tooltip = "The main reservoir gauge gains the equalizing reservoir's hand, blue; the main\nreservoir's turns red. Takes effect as a cab loads.")]
+        [Draw("Equalizing reservoir hand on the main reservoir gauge", Tooltip = "On engines with a manual-lap brake valve: the steam engines, the DM3, and custom\nengines such as the FPD-4. The gauge gains the equalizing reservoir's hand, blue;\nthe main reservoir's turns red. A gauge with an equalizing reservoir hand of its own\nkeeps it, and the hand reads the equalizing reservoir. Takes effect as a cab loads.")]
         public bool EqualizingHand = true;
+
 
         [Header("Display")]
         [Draw("Brake handle positions by the crosshair", Tooltip = "Looking at an engine's train brake, independent brake, or brake valve cut-out,\nor a car's brake levers, shows where it stands (not in VR). Bailing off and the\nbooklet button show a notice. Off, the notices go to the log only.")]

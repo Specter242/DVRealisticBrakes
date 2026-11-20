@@ -74,11 +74,17 @@ namespace RealisticBrakes.Controls
             return booklet;
         }
 
-        /// <summary>Puts another booklet in front of the player.</summary>
-        public static void Spawn()
+        /// <summary>The notice once a booklet is put in front of the player.</summary>
+        internal static string SpawnedNotice => Title + " is in front of you";
+
+        /// <summary>
+        /// Puts another booklet in front of the player: the settings' button, and the Comms Tablet's
+        /// (<see cref="CommsTabletSettings"/>). False with no game loaded or no booklet to copy.
+        /// </summary>
+        public static bool Spawn()
         {
             if (!CanSpawn)
-                return;
+                return false;
             var player = PlayerManager.PlayerTransform;
             var forward = Vector3.ProjectOnPlane(player.forward, Vector3.up).normalized;
             if (forward.sqrMagnitude < 0.5f)
@@ -86,9 +92,10 @@ namespace RealisticBrakes.Controls
             // Its page's top is its -z: turned so, it lands reading the right way up to the player.
             var booklet = Make(player.position + forward * 0.6f + Vector3.up * 1.2f, Quaternion.LookRotation(-forward));
             if (booklet == null)
-                return;
+                return false;
             booklet.GetComponent<InventoryItemSpec>().BelongsToPlayer = true;
             booklet.AddComponent<BookletDelivery>();
+            return true;
         }
 
         private static GameObject Build()
@@ -338,7 +345,7 @@ namespace RealisticBrakes.Controls
                     item.ItemRigidbody.angularVelocity = Vector3.zero;
                 }
             }
-            Notice.Show(BrakeBooklet.Title + " is in front of you");
+            Notice.Show(BrakeBooklet.SpawnedNotice);
             Destroy(this);
         }
     }

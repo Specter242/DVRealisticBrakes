@@ -29,7 +29,8 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.4.4"
+EDITION = "1.4.5"
+COVER_LINE = "European and American Equipment"
 
 LEFT, RIGHT = 110, W - 144
 
@@ -411,7 +412,7 @@ CHAPTERS = [
             ("Force from car", "Loaded and empty cars stop differently."),
             ("G/P lever", "The freight cars' mode as they come into service."),
             ("Added notches", "The filling stroke, emergency, release, and holding on the handles."),
-            ("ER hand", "The equalizing reservoir's blue hand on the steam engines' gauge."),
+            ("ER hand", "The equalizing reservoir's hand on manual-lap engines' gauge."),
             ("Bail off", "Clicking the independent bails off."),
             ("Bail-off key", "Bails off the engine you are on. Unbound until you set it."),
             ("Controls' text", "The text by the crosshair on the brake controls and car levers, and the notices after a bail-off. Off, the notices go to the log."),
@@ -486,7 +487,7 @@ def cover():
     p.text(W / 2, 600, "POCKET-BOOK", 96, fill=gold, weight="bold", anchor="middle", spacing=6)
     p.add(f'<line x1="300" y1="660" x2="{W-300}" y2="660" stroke="{gold}" stroke-width="3"/>')
     p.text(W / 2, 740, "for Enginemen of the Valley", 48, fill=gold, style="italic", anchor="middle")
-    p.text(W / 2, 830, "European and American Equipment", 40, fill=gold, anchor="middle")
+    p.text(W / 2, 830, COVER_LINE, 40, fill=gold, anchor="middle")
     cx, cy = W / 2, 1110
     p.add(f'<circle cx="{cx}" cy="{cy}" r="150" fill="none" stroke="{gold}" stroke-width="8"/>')
     p.add(f'<circle cx="{cx}" cy="{cy}" r="120" fill="none" stroke="{gold}" stroke-width="3"/>')

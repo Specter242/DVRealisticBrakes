@@ -199,9 +199,14 @@ namespace RealisticBrakes.Sim
         /// <summary>Whether the model ran <paramref name="system"/>'s car this frame.</summary>
         public static bool Handles(BrakeSystem system) => Main.Active && TryGet(system, out var air) && air.Handled;
 
- internal static bool Vents(HoseAndCock hose) =>
-            hose != null && hose.cockOpen
-            && (hose.connectedTo == null || (!hose.connectedTo.cockOpen && Main.Settings.Equipment == Equipment.European));
+        /// <summary>
+        /// Whether the pipe blows out at <paramref name="hose"/>, a set's end: its cock open with no hose coupled to it.
+        /// </summary>
+        internal static bool Vents(HoseAndCock hose) => hose != null && hose.cockOpen && hose.connectedTo == null;
+
+ internal static bool VentsThroughClosedCock(HoseAndCock hose) =>
+            hose != null && hose.cockOpen && hose.connectedTo != null && !hose.connectedTo.cockOpen
+            && Main.Settings.Equipment == Equipment.European;
 
 
         /// <summary>Advances <paramref name="set"/>'s air <paramref name="dt"/> s and writes it back to the stock fields.</summary>
@@ -216,9 +221,14 @@ namespace RealisticBrakes.Sim
             var line = kept.Line;
             var pumpSpeedUp = set.firstCar.gameParams?.CompressorProductionModifier ?? 1f;
             var pipe = line.Pipe;
+            var frontHose = VentsThroughClosedCock(set.GetEndmost(front: true));
+            var rearHose = VentsThroughClosedCock(set.GetEndmost(front: false));
+            var hoseChanged = frontHose != pipe.FrontHoseVent || rearHose != pipe.RearHoseVent;
+            pipe.FrontHoseVent = frontHose;
+            pipe.RearHoseVent = rearHose;
             var frontOpen = Vents(set.GetEndmost(front: true));
             var rearOpen = Vents(set.GetEndmost(front: false));
-            var changed = frontOpen != pipe.FrontOpen || rearOpen != pipe.RearOpen;
+            var changed = hoseChanged || frontOpen != pipe.FrontOpen || rearOpen != pipe.RearOpen;
             pipe.FrontOpen = frontOpen;
             pipe.RearOpen = rearOpen;
             changed |= VentFromOutside(set, line, dt);

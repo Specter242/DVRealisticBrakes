@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.5 (2026-11-20)
+
+- Fixed: on European equipment, closing the end cocks between two cars one
+  after the other no longer sets the brakes, so kicking cars and dutch drops
+  work again.
+- Fixed: American cars could stay lightly braked after the cocks between
+  them were closed and reopened before the train had charged.
+- The FPD-4's main reservoir gauge keeps its own hands: its white hand now
+  shows the equalizing reservoir, and the mod adds none there. The gauge
+  labels now go only on the game's own engines, and the setting is now
+  "Equalizing reservoir hand on the main reservoir gauge".
+- With Comms Tablet 0.1.4 or newer, the tablet's Settings app has a "Give
+  brake booklet" button in Realistic Brakes' section.
+
 ## 1.4.4 (2026-11-17)
 
 - The settings are grouped under Brake model, Cab, Display, and Keys, with

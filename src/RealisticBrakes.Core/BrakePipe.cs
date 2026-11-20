@@ -25,6 +25,16 @@ namespace RealisticBrakes.Core
         /// <summary>The hole an open angle cock at an unconnected end vents through.</summary>
         public Orifice OpenEnd { get; set; } = new Orifice(25);
 
+        /// <summary>
+        /// The small vent a closed European end cock opens on its hose side
+        /// (EN 14601: "a small vent hole"), through which an open cock coupled
+        /// to that hose bleeds the pipe. Its size is inferred: enough to empty
+        /// a hose in a few seconds, and slow enough that closing the two cocks
+        /// one after the other doesn't apply the brakes, even on a single car
+        /// with two seconds between them.
+        /// </summary>
+        public Orifice ClosedCockVent { get; set; } = new Orifice(1.0);
+
 
         /// <summary>The pipe's cross-section, m².</summary>
         public double Area => Math.PI * Bore * Bore / 4;
@@ -93,6 +103,12 @@ namespace RealisticBrakes.Core
         /// <summary>Whether the rear end's angle cock stands open to the air.</summary>
         public bool RearOpen { get; set; }
 
+        /// <summary>Whether the front end's open cock is coupled to a closed one, and bleeds through its vent.</summary>
+        public bool FrontHoseVent { get; set; }
+
+        /// <summary>Whether the rear end's open cock is coupled to a closed one, and bleeds through its vent.</summary>
+        public bool RearHoseVent { get; set; }
+
 
         /// <summary>The air through the front end's open cock in the last step, whichever way it ran, kg/s, for the hoses' sound.</summary>
         public double FrontVentFlow { get; private set; }
@@ -159,15 +175,16 @@ namespace RealisticBrakes.Core
                 sections[i].Mass -= moved;
                 sections[i + 1].Mass += moved;
             }
-            FrontVentFlow = Vent(FrontOpen, sections[0], dt);
-            RearVentFlow = Vent(RearOpen, sections[sections.Length - 1], dt);
+            FrontVentFlow = Vent(FrontOpen, FrontHoseVent, sections[0], dt);
+            RearVentFlow = Vent(RearOpen, RearHoseVent, sections[sections.Length - 1], dt);
             foreach (var s in sections)
                 if (s.Mass < 0)
                     s.Mass = 0;
         }
 
-        // An end's flow through its open cock, whichever way it runs, kg/s.
-        private double Vent(bool open, Chamber end, double dt) => open ? Math.Abs(Geometry.OpenEnd.OpenToAtmosphere(end, dt)) / dt : 0;
+        // An end's flow through its open cock, whichever way it runs, or through the closed cock's vent beside it, kg/s.
+        private double Vent(bool open, bool hoseVent, Chamber end, double dt) =>
+            open ? Math.Abs(Geometry.OpenEnd.OpenToAtmosphere(end, dt)) / dt : hoseVent ? Geometry.ClosedCockVent.Vent(end, dt) / dt : 0;
 
         /// <summary>
         /// The Darcy friction factor times the flow's magnitude, kg/s:

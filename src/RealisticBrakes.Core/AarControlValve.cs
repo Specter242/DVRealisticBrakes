@@ -64,6 +64,13 @@ namespace RealisticBrakes.Core
         /// <summary>How far the pipe must rise over the auxiliary reservoir to release, Pa (about 1.5 psi).</summary>
         public double ReleaseThreshold { get; set; } = 0.1 * Air.Bar;
 
+        /// <summary>
+        /// How near the pipe must come back, Pa, to where the auxiliary reservoir stood when the brake applied, to let
+        /// a brake go that took too little from the reservoir for the pipe ever to stand
+        /// <see cref="ReleaseThreshold"/> over it: a dip that passed, as cocks reopened onto a part-charged cut.
+        /// </summary>
+        public double RestoredBand { get; set; } = 0.02 * Air.Bar;
+
         /// <summary>The auxiliary reservoir level with the pipe within this, Pa, the valve laps.</summary>
         public double LapBand { get; set; } = 0.01 * Air.Bar;
 
@@ -298,6 +305,9 @@ namespace RealisticBrakes.Core
         // The empty setting's share of loaded cylinder pressure.
         private double emptyRatio = 1;
 
+        // Where the auxiliary reservoir stood when the brake applied, Pa; unknown (never reached) for one restored applied.
+        private double appliedFrom = double.PositiveInfinity;
+
         public void ChargeTo(double pressure)
         {
             AuxiliaryReservoir.Pressure = pressure;
@@ -320,6 +330,7 @@ namespace RealisticBrakes.Core
             Cylinder.Pressure = Math.Max(Air.Atmosphere, cylinder);
             QuickActionChamber.Pressure = pipe;
             Applied = cylinder > Air.FromGaugeBar(0.1);
+            appliedFrom = double.PositiveInfinity;
             Emergency = false;
             quickServiceDone = Applied;
             CylinderReleaseOpen = false;
@@ -328,6 +339,7 @@ namespace RealisticBrakes.Core
         /// <summary>Sets the latch as saved.</summary>
         public void RestoreLatch(bool applied, bool emergency)
         {
+            appliedFrom = double.PositiveInfinity;
             Applied = applied;
             Emergency = applied && emergency;
             quickServiceDone = applied;
@@ -403,17 +415,20 @@ namespace RealisticBrakes.Core
             if (!Emergency && QuickActionChamber.Pressure - pipe.Pressure > spec.EmergencyThreshold)
             {
                 Emergency = true;
+                if (!Applied)
+                    appliedFrom = AuxiliaryReservoir.Pressure;
                 Applied = true;
             }
 
             var lead = AuxiliaryReservoir.Pressure - pipe.Pressure;
-            if (Applied && !Emergency && -lead > spec.ReleaseThreshold)
+            if (Applied && !Emergency && (-lead > spec.ReleaseThreshold || pipe.Pressure >= appliedFrom - spec.RestoredBand))
                 Release();
             else if (Emergency && pipe.Pressure - AuxiliaryReservoir.Pressure > spec.ReleaseThreshold)
                 Release();
             else if (!Applied && lead > spec.ApplyThreshold)
             {
                 Applied = true;
+                appliedFrom = AuxiliaryReservoir.Pressure;
                 quickServiceDone = false;
             }
 

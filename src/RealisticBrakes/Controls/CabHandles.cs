@@ -56,6 +56,8 @@ namespace RealisticBrakes.Controls
                     return controls.IndependentBrake?.portId;
                 case InteriorControlsManager.ControlType.TrainBrakeCutout:
                     return controls.BrakeCutout?.portId;
+                case InteriorControlsManager.ControlType.AirPump:
+                    return controls.AirPump?.portId;
                 default:
                     return null;
             }

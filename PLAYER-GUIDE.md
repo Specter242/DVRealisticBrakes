@@ -103,9 +103,11 @@ while they recharge.
   - A handle left in release, holding, or emergency stays there through a
     save. A remote or a driver mod that applies the brakes takes it out.
   - The **main reservoir gauge** now has two hands: red for the main
-    reservoir, blue for the equalizing reservoir (ER). The pipe and
-    cylinder gauge is labeled too. The overlay shows the equalizing
-    reservoir as well.
+    reservoir, blue for the equalizing reservoir (ER). On the game's own
+    engines it and the pipe and cylinder gauge are labeled. A custom
+    engine whose gauge has an equalizing reservoir hand of its own, as
+    the FPD-4's white hand, keeps it, and the hand reads the equalizing
+    reservoir. The overlay shows the equalizing reservoir as well.
 - **Looking at the brake handles** (not in VR) shows where they stand by
   the crosshair: the train brake's position (with the equalizing
   reservoir or the reduction), the independent's application and the
@@ -236,8 +238,10 @@ bailing off, and the settings. It's given once, into your inventory with
 the game's own booklets: on a new game, or the first time a save loads with
 the mod. It's saved with the game and yours to keep, drop, or throw away. To
 get another, open the mod's settings in a loaded game and press **Spawn the
-brake booklet**; it appears in front of you. Press a line on its contents
-page, or a tab down its edge, to turn to that chapter.
+brake booklet**; it appears in front of you. With the Comms Tablet 0.1.4 or
+newer, **Give brake booklet** at the top of Realistic Brakes' section in the
+tablet's Settings app does the same. Press a line on its contents page, or a
+tab down its edge, to turn to that chapter.
 
 ## Settings
 
@@ -270,8 +274,8 @@ for what it does.
   emergency, and the steam engines' release (and holding, on American
   engines). On by default; it takes effect as a cab loads.
 - **Click the independent brake to bail off:** on by default.
-- **Equalizing reservoir hand** on the steam engines' main reservoir
-  gauge: on by default; it takes effect as a cab loads.
+- **Equalizing reservoir hand on the main reservoir gauge** of the
+  manual-lap engines: on by default; it takes effect as a cab loads.
 
 **Display**
 

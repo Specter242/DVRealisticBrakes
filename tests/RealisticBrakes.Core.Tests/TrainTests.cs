@@ -451,3 +451,88 @@ public class BailOffTests
         Assert.Equal(0, rig.Engine.BailOff());
     }
 }
+
+/// <summary>The end cocks between two cars being closed, one after the other, on a charged train.</summary>
+public class EndCockTests
+{
+    private static Rig Charged() { var rig = new Rig(6); rig.Run(120); return rig; }
+
+    private static double Gauge(Chamber c) => Air.ToGaugeBar(c.Pressure);
+
+    // Runs a part of the train cut off from the rest, its end bleeding for the first seconds, and says whether its cars braked.
+    private static (bool Applied, double Peak, double Lowest) Cut(List<CarBrake> cars, BrakeLine old, Rig? feed, Action<BrakePipe, bool> bleed, double seconds, double watch = 45)
+    {
+        var line = new BrakeLine(cars, Rig.Geometry, null, new[] { old });
+        var valves = cars.Where(c => c.Distributor != null).ToList();
+        var (applied, peak, lowest) = (false, 0.0, double.MaxValue);
+        for (var t = 0.0; t < watch; t += Rig.Frame)
+        {
+            bleed(line.Pipe, t < seconds);
+            if (feed != null)
+                feed.Engine.CompressorFlow = Air.ToAbsoluteBar(feed.Engine.MainReservoir.Pressure) < 8.6 ? Rig.FreeAir(Rig.CompressorRate) : 0;
+            line.Advance(Rig.Frame);
+            foreach (var car in valves)
+            {
+                applied |= car.Distributor!.Applied;
+                peak = Math.Max(peak, Gauge(car.Cylinder));
+                lowest = Math.Min(lowest, Gauge(car.PipeSection));
+            }
+        }
+        return (applied, peak, lowest);
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(6)]
+    public void ASecondBetweenTheCocksLeavesACutReleased(int cars)
+    {
+        var rig = Charged();
+        var cut = Cut(rig.Cars.Skip(rig.Cars.Count - cars).ToList(), rig.Line, null, (p, on) => p.FrontHoseVent = on, 1);
+        Assert.False(cut.Applied);
+        Assert.Equal(0, cut.Peak, 2);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void SecondsBetweenTheCocksLeaveASingleCarReleased(double gap)
+    {
+        var rig = Charged();
+        var cut = Cut(rig.Cars.Skip(rig.Cars.Count - 1).ToList(), rig.Line, null, (p, on) => p.FrontHoseVent = on, gap);
+        Assert.False(cut.Applied);
+    }
+
+    [Fact]
+    public void ThreeSecondsBetweenTheCocksBrakeASingleCar()
+    {
+        // The limit of the small vent: a lone car has the least pipe to bleed.
+        var rig = Charged();
+        Assert.True(Cut(rig.Cars.Skip(rig.Cars.Count - 1).ToList(), rig.Line, null, (p, on) => p.FrontHoseVent = on, 3).Applied);
+    }
+
+    [Fact]
+    public void ASecondBetweenTheCocksLeavesTheEngineSideReleased()
+    {
+        var rig = Charged();
+        var head = Cut(rig.Cars.Take(4).ToList(), rig.Line, rig, (p, on) => p.RearHoseVent = on, 1);
+        Assert.False(head.Applied);
+        Assert.InRange(head.Lowest, 4.9, 5.1);
+    }
+
+    [Fact]
+    public void ACockLeftOpenAgainstAClosedOneStillBleedsTheCutOn()
+    {
+        var rig = Charged();
+        Assert.True(Cut(rig.Cars.Skip(4).ToList(), rig.Line, null, (p, on) => p.FrontHoseVent = on, 30).Applied);
+    }
+
+    [Fact]
+    public void AnOpenEndStillDumpsThePipe()
+    {
+        var rig = Charged();
+        var cut = Cut(rig.Cars.Skip(4).ToList(), rig.Line, null, (p, on) => p.FrontOpen = on, 1);
+        Assert.True(cut.Applied);
+        Assert.True(cut.Lowest < 1, $"the pipe only fell to {cut.Lowest:F2} bar");
+    }
+}
+
