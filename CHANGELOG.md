@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1 (2026-11-21)
+
+- Fixed: on the LMS 4F, and other engines whose gauges are modeled at
+  another scale, the blue equalizing reservoir hand floated in front of the
+  main reservoir gauge. It now sits on the dial.
+
 ## 1.5.0 (2026-11-21)
 
 - New: the vacuum brake, a third brake equipment choice, as British railways

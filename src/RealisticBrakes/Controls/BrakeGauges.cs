@@ -19,9 +19,6 @@ namespace RealisticBrakes.Controls
         internal const string CylinderRed = "#B53D32";
         private static readonly Color Ink = new Color(0.1f, 0.09f, 0.08f);
 
-        // The added hand sits this far behind the stock one, m, as the game's own second hand does (the cylinder's, behind the pipe's).
-        internal const float HandOffset = 0.0015f;
-
         private const float LegendDrop = 0.72f;
         private const float LegendHeight = 0.15f;
         private const float LegendWidth = 0.7f;
@@ -63,7 +60,11 @@ namespace RealisticBrakes.Controls
             foreach (var reader in copy.GetComponents<AIndicatorBrakePressureReader>())
                 Object.DestroyImmediate(reader);
             var hand = copy.GetComponent<IndicatorGauge>();
-            hand.needle.localPosition -= Toward(hand) * HandOffset;
+            // It sits GaugeHand.Gap behind the stock hand, as the game's own second hand does (the cylinder's, behind the
+            // pipe's): metres in the cab, in the units of the frame the hand moves in, as some dials are modeled at another scale.
+            var axis = Toward(hand);
+            var metresPerUnit = hand.needle.parent != null ? hand.needle.parent.TransformVector(axis).magnitude : 1f;
+            hand.needle.localPosition -= axis * (float)GaugeHand.LocalGap(metresPerUnit);
             Paint(mainReservoir, RedHandMaterial());
             Paint(hand, BlueHandMaterial());
             var driver = copy.AddComponent<EqualizingHand>();
