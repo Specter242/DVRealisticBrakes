@@ -4,34 +4,37 @@ namespace RealisticBrakes
 {
     /// <summary>
     /// For other mods (by reflection, when this mod is loaded and
-    /// <see cref="Active"/>). This mod's own click on the independent lever
-    /// bails off through <see cref="BailOff"/>; another mod's control can too.
+    /// <see cref="Active"/>). <see cref="BailOff"/> bails off as this mod's own
+    /// click on the independent lever does; another mod's control can call it
+    /// directly.
     /// </summary>
     public static class Api
     {
+        /// <summary>
+        /// The public API revision: 2 adds this property and makes
+        /// <see cref="BailOff"/> bail the multiple-unit consist and report to
+        /// multiplayer.
+        /// </summary>
+        public static int ApiVersion => 2;
+
         /// <summary>Whether this mod is running the brake now.</summary>
         public static bool Active => Main.Active;
 
         /// <summary>
-        /// Bails off <paramref name="car"/>'s independent: the engine lets go of
-        /// the automatic application then on, the train's brakes staying
-        /// applied, until a release. Returns the cylinder pressure bailed, gauge
-        /// bar; 0 when there was nothing to bail or the car isn't an engine
-        /// under the model. On an American steam engine's E-T, in an emergency
-        /// from its own handle, the valve puts the pressure back once the
-        /// independent leaves release, so a single call lets off only for a
-        /// moment (Wood p. 120).
+        /// Bails off <paramref name="car"/>'s independent and any engines
+        /// joined to it by multiple-unit cable, reporting the bail in
+        /// multiplayer without showing a HUD notice: the engines let go of the
+        /// automatic application then on, the train's brakes staying applied,
+        /// until a release. Returns the cylinder pressure bailed on
+        /// <paramref name="car"/>, gauge bar; 0 when this mod isn't active,
+        /// <paramref name="car"/> is null or not an engine under the model, or
+        /// there was nothing to bail on <paramref name="car"/>. On an American
+        /// steam engine's E-T, in an emergency from its own handle, the valve
+        /// puts the pressure back once the independent leaves release, so a
+        /// single call lets off only for a moment (Wood p. 120).
         /// </summary>
-        public static float BailOff(TrainCar car)
-        {
-            if (!Main.Active || car == null || car.brakeSystem == null || !BrakeSets.TryGet(car.brakeSystem, out var air))
-                return 0f;
-            var engine = air.Brake.Locomotive;
-            if (engine == null)
-                return 0f;
-            air.Touch();
-            return (float)(engine.BailOff() / Core.Air.Bar);
-        }
+        public static float BailOff(TrainCar car) =>
+            (float)(Controls.IndependentBailClick.BailFull(car, notice: false) / Core.Air.Bar);
 
         /// <summary>
         /// The pressure of <paramref name="part"/> on <paramref name="car"/> now,
@@ -51,7 +54,17 @@ namespace RealisticBrakes
             if (!Main.Active || car == null || car.brakeSystem == null || !Core.BrakeParts.TryParse(part, out var which)
                 || !BrakeSets.TryGet(car.brakeSystem, out var air))
                 return float.NaN;
+            if (air.IsVacuum)
+                return float.NaN;
             return (float)(air.Brake.GaugePressure(which) / Core.Air.Bar);
+        }
+
+ public static float VacuumInches(TrainCar car, string part)
+        {
+            if (!Main.Active || car == null || car.brakeSystem == null || string.IsNullOrEmpty(part)
+                || !BrakeSets.TryGet(car.brakeSystem, out var air) || !air.IsVacuum)
+                return float.NaN;
+            return (float)Core.Vacuum.ReadInches(air.Brake, part);
         }
 
         /// <summary>
@@ -64,6 +77,8 @@ namespace RealisticBrakes
         {
             if (!Main.Active || car == null || car.brakeSystem == null || !BrakeSets.TryGet(car.brakeSystem, out var air))
                 return null;
+            if (air.IsVacuum)
+                return "Vacuum";
             if (air.Brake.Locomotive != null)
                 return CarAir.IsAmericanEngine(car) ? "American" : "European";
             return Main.Settings.Equipment == RealisticBrakes.Equipment.American ? "American" : "European";

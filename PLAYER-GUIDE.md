@@ -5,7 +5,8 @@ brake pipe, its own reservoirs behind a check valve, and its own valve, so a
 brake application travels down the train as it does on a real one. Long
 trains take time to apply and minutes to release and recharge, loaded cars
 stop slower than empty ones, and the steam engines' brake valves make a
-reduction you can hold.
+reduction you can hold. A setting puts the whole world on the automatic
+vacuum brake instead.
 
 ## What changes from the stock brake
 
@@ -149,10 +150,14 @@ while they recharge.
   about 18 seconds.
 - **Bailing off:** with the train brake applied, click the independent
   brake lever (in VR, hold it and press the trigger). The engine's own
-  brakes let go, and the train's stay on. Engines joined by MU cable bail
-  off together. A further reduction applies the engine again; a release
-  clears the bail. A setting turns the click off. A bail-off key, set in
-  the mod's settings, does the same from wherever you stand in the cab.
+  brakes let go, and the train's stay on. On **European** engines, a quick
+  click still lets off the whole application at once, while clicking and
+  holding the lever still lets the engine's brakes off a little at a time
+  (about 1 bar a second) until you let go; what's left stays on. Engines
+  joined by MU cable bail off together. A further reduction applies the
+  engine again; a release clears the bail. A setting turns the click off.
+  A bail-off key, set in the mod's settings, does the same from wherever
+  you stand in the cab.
   - An **American** steam engine bails off a little at a
     time, as the real E-T does: hold the independent in release, the notch
     below running, and the engine's brakes let off for as long as you hold
@@ -167,6 +172,43 @@ while they recharge.
     running only with the train brake in running too, and in lap it holds
     the engine's brakes through the train's release. A moment in running
     and back to lap lets off only part.
+
+## Brakes won't release?
+
+Check these first, or turn on the **Brake pressure overlay** in the settings
+to see each car's pressures and flags (`HB`, `CUT OUT`, `VALVE OUT`,
+`HOSE OFF`, `COCK SHUT`):
+
+- **Still charging or releasing:** long trains take real time. A freshly
+  coupled cut charges in minutes (about five for fifteen cars, ten for
+  thirty), and a freight car in **G** takes 45–60 s to release after the
+  pipe comes back up at that car.
+- **Hand brakes on spawned cuts:** the mod sets enough hand brakes on
+  spawned or loaded cuts to hold them on a grade. Check the cut (or look
+  for `HB` in the overlay) and release them.
+- **Brake valve cut out:** make sure the leading engine's train brake
+  cut-out cock is **cut in** (not `VALVE OUT`), and trailing engines are
+  cut out.
+- **S282 / S060 E-T engine brake stuck on:** the S282, S060, and American
+  custom steam engines have the E-T equipment. Their own cylinders release
+  only when **both** the train brake (H-6) and the independent (S-6) are in
+  **running** — leaving the train brake in release or holding, or the S-6
+  in lap, holds the engine's brakes on.
+- **Overcharged cut behind a 5 bar engine:** a cut left overcharged after a
+  filling stroke or release position applies its brakes when coupled to an
+  engine holding 5.0 bar. On a European engine, give the train a filling
+  stroke (or use the Angleichen key) and let it come down; on an American
+  diesel (which has no filling stroke) or any engine, pull each car's bleed
+  handle.
+- **American emergency lockout:** after an emergency on American (AB)
+  equipment, the valves lock out recharge for about 60 seconds before the
+  pipe will build back up and release.
+- **Uncoupled hoses, closed end cocks, cut-out cars, or retainers:** check
+  that every coupled end has its air hose connected (`HOSE OFF` in the
+  overlay) and both end cocks open (`COCK SHUT`), that no car's
+  isolating/cut-out cock is closed (`CUT OUT`), and on American cars that
+  no retaining valve is left up in LP, HP, or SD (set it to **EX** to let
+  the cylinder exhaust).
 
 ## European or American equipment
 
@@ -215,7 +257,7 @@ kinds work off the same 5 bar pipe.
     over the pipe in running and holding, and up to 7.6 bar in lap and
     service, as the real duplex governor did. The independent brake is the
     S-6 (see Bailing off), up to 3.1 bar, and an emergency puts 4.5 bar in
-    the engine's cylinders.
+    the engine's cylinders (4.7 bar from the engine's own handle).
 
 ## Loaded and empty cars
 
@@ -229,11 +271,34 @@ the cylinders take their full pressure, but every car brakes with the force
 sized for it empty, so a loaded train takes much longer to stop. Use the retainers on long grades. A setting gives them the modern
 automatic empty/load equipment instead.
 
+## Vacuum brake
+
+Choose **Vacuum** as the brake equipment and every engine and car in the
+world runs the automatic vacuum brake at 21 inches, as British railways did.
+The Air-Brake Pocket-Book's chapter 7 has the whole of it.
+
+- **Steam engines:** the air pump's handwheel is the small ejector's steam
+  valve, wherever the engine has it (on the S282 and S060, outside the cab).
+  Open it and running holds the vacuum. The handle's release position works
+  the large ejector, even with the wheel shut. Lap cuts the pipe off, and
+  apply lets air in while it's held. The engine and tender brake by steam,
+  following the pipe, and that can't be bailed off. The ejectors are heard
+  at the chimney; "Vacuum ejectors' volume" in the settings sets how loud,
+  from 0 to 200 %.
+- **Diesels:** the exhausters run with the engine. The handle sets the vacuum
+  from 21 inches down to none, and the filling stroke runs them at full speed.
+  The engine's own air brake follows the pipe; click the independent lever to
+  bail it off.
+- **Gauges:** the brake pipe gauge becomes a 0–30 inch vacuum gauge, the red
+  hand showing the nearest car's chamber. On steam engines the main reservoir
+  gauge shows the steam brake.
+- **Cars:** the bleed handle is the release cord. There are no lever rows.
+
 ## The brake booklet
 
 *The Air-Brake Pocket-Book*, after the Westinghouse instruction books: how
-the air brake works, each engine's brake valve on European and American
-equipment, the cars' valves, the levers at the car, the independent and
+the brakes work, each engine's brake valve on European, American, and
+vacuum equipment, the cars' valves, the levers at the car, the independent and
 bailing off, and the settings. It's given once, into your inventory with
 the game's own booklets: on a new game, or the first time a save loads with
 the mod. It's saved with the game and yours to keep, drop, or throw away. To
@@ -253,12 +318,16 @@ for what it does.
 - **Run the realistic brake:** off gives the game's own brake back at once,
   from the pressures this one left.
 - **Brake equipment:** European or American, for the cars and for the
-  engines whose own isn't known.
+  engines whose own isn't known; or Vacuum, for every engine and car.
 - **Every engine uses this equipment:** off by default, so each engine has
-  its own prototype's equipment; on, every engine uses the setting.
-- **American freight cars' braking for their load:** Period (no
-  empty/load valve, the default) or EmptyLoad (automatic). Shown with
-  American equipment.
+  its own prototype's equipment; on, every engine uses the setting. Not
+  shown with Vacuum, which every engine uses.
+- **Vacuum cars have direct admission valves** (on by default, shown with
+  Vacuum): a long train brakes in about half a minute; off, as before
+  them, it takes about two.
+- **Freight cars' braking for their load:** Period (no empty/load valve,
+  the default) or EmptyLoad (automatic). Shown with American and vacuum
+  equipment.
 - **Freight cars brake with their own force:** loaded and empty cars stop
   differently.
 - **Freight cars' G/P lever** as cars come into service.
@@ -270,27 +339,32 @@ for what it does.
 
 **Cab**
 
-- **Train brake handles gain notches:** the diesels' filling stroke and
-  emergency, and the steam engines' release (and holding, on American
-  engines). On by default; it takes effect as a cab loads.
+- **Train brake handles gain notches:** self-lapping handles gain a filling
+  stroke and emergency, and manual-lap handles (steam engines and the DM3)
+  gain release (and holding, on American engines). On by default; it takes
+  effect as a cab loads.
 - **Click the independent brake to bail off:** on by default.
 - **Equalizing reservoir hand on the main reservoir gauge** of the
   manual-lap engines: on by default; it takes effect as a cab loads.
+- **Vacuum ejectors' volume, %** (shown with Vacuum): 100 by default, 0
+  silences them; it takes effect at once.
 
 **Display**
 
-- **Brake handle positions by the crosshair:** on by default. It covers
-  the notices after a bail-off or the booklet button too; off, they go to
-  the log only. A warning that a multiplayer host runs another version
-  still shows.
+- **Brake handle positions by the crosshair:** on by default. It covers the
+  bleed handle text and the notices after a bail-off, reservoir draining,
+  or the booklet button too; off, notices go to the log only. A warning
+  that a multiplayer host runs another version still shows.
 - **Brake pressure overlay** (off by default): for the train you're on:
   pipe, control (or, on American cars, emergency) reservoir, auxiliary
-  reservoir, and cylinder, in gauge bar.
+  reservoir, and cylinder, in gauge bar, plus status flags (`HB`,
+  `CUT OUT`, `VALVE OUT`, `HOSE OFF`, `COCK SHUT`).
 
 **Keys**
 
 - **Bail-off key:** unbound until you set it. It bails off the engine
-  you're on, as the click does, even with the click turned off.
+  you're on, as the click does (on European engines, a quick tap bails in
+  full and holding graduates off), even with the click turned off.
 - **Angleichen key** (European brake valves): unbound until you set it.
   Held, it raises the brake pipe slowly, to at most 5.5 bar, to free car
   brakes that stick at 5.0; let go, it comes down at 0.1 bar a minute.

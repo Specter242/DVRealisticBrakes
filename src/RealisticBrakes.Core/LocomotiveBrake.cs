@@ -54,6 +54,15 @@ namespace RealisticBrakes.Core
         public bool HoldsAutomaticBrake { get; set; }
 
         /// <summary>
+        /// Whether the engine's automatic brake can be bailed off graduated
+        /// (<see cref="LocomotiveBrake.BailOffBy"/>): European engines (where a
+        /// quick click still bails in full and holding graduates it off) and
+        /// American E-T engines (where the S-6's release position graduates it
+        /// off). American 26-L diesels keep full bail-off only.
+        /// </summary>
+        public bool GraduatedBail { get; set; } = true;
+
+        /// <summary>
         /// The engine's cylinders in an emergency, gauge Pa: its full service,
         /// unless the equipment gives more. The No. 6 equalizes "at 65 pounds
         /// instead of the 50 pounds obtainable at full service" (Wood p. 91).
@@ -118,7 +127,7 @@ namespace RealisticBrakes.Core
         /// </summary>
         public static LocomotiveBrakeSpec American()
         {
-            var spec = new LocomotiveBrakeSpec();
+            var spec = new LocomotiveBrakeSpec { GraduatedBail = false };
             spec.Distributor.ControlReservoirLimit = UicDistributorSpec.RunningLimit;
             return spec;
         }
@@ -282,9 +291,9 @@ namespace RealisticBrakes.Core
 
         /// <summary>
         /// Bails off up to <paramref name="amount"/> gauge Pa of the automatic
-        /// application, graduated, as holding the S-6 independent in release
-        /// does on an E-T engine: what's left "will remain constant (unless
-        /// automatically increased by brake pipe leakage)" (Wood p. 120).
+        /// application, graduated, as holding the independent in release does
+        /// on an E-T or European engine: what's left stays until a further
+        /// reduction adds to it or a release clears it (Wood p. 120).
         /// Returns what was bailed, gauge Pa. The independent counts as held in
         /// release for <paramref name="hold"/> s; an amount of 0 only keeps it
         /// held.

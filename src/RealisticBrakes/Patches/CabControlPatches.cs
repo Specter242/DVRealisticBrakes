@@ -41,6 +41,7 @@ namespace RealisticBrakes.Patches
             });
             // Shown only while the model runs, so fitted either way.
             Try("brake valve text", () => CabValveHover.Attach(car, cab));
+            Try("the vacuum brake's text", () => VacuumHover.Attach(car, cab));
             if (!Main.Active)
                 return;
             Try("the S-6 independent", () =>
@@ -63,6 +64,7 @@ namespace RealisticBrakes.Patches
                 if (Main.Settings.EqualizingHand)
                     BrakeGauges.Fit(cab, car);
             });
+            Try("the vacuum gauges", () => VacuumGauges.Fit(cab, car));
         }
 
         private static void Try(string what, System.Action fit)
@@ -113,6 +115,16 @@ namespace RealisticBrakes.Patches
             {
                 Main.Mod?.Logger.Warning($"A car's brake levers weren't fitted: {e.GetBaseException().GetType().Name}: {e.GetBaseException().Message}");
             }
+            // The S282's and S060's air pump wheels are among their outside controls, which load apart from the cab.
+            try
+            {
+                if (__instance.loadedExternalInteractables != null && __instance.SimController != null && __instance.SimController.controlsOverrider != null)
+                    VacuumHover.Attach(__instance, null);
+            }
+            catch (System.Exception e)
+            {
+                Main.Mod?.Logger.Warning($"A car's outside controls have no vacuum brake text: {e.GetBaseException().GetType().Name}: {e.GetBaseException().Message}");
+            }
             // An engine with no cab interior is driven from its outside controls (the WE-4U's desks), which no cab's
             // controls are set up from: its brake handles are fitted here. An engine with a cab is fitted as its cab sets up.
             if (__instance.loadedExternalInteractables != null && __instance.carLivery != null && __instance.carLivery.interiorPrefab == null
@@ -133,6 +145,32 @@ namespace RealisticBrakes.Patches
                 return true;
             handle.OnNotch(__instance, e.newValue);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// A controller's axis on a widened train brake handle or the S-6 independent: on a notch, moved only past a
+    /// deadband (<see cref="Controls.TrainBrakeHandle.FromAxis"/>, <see cref="Controls.IndependentHandle.FromAxis"/>).
+    /// The game writes an axis into its control every frame (<c>AnalogSetValueJoystickInput</c>); anything else set
+    /// passes untouched.
+    /// </summary>
+    [HarmonyPatch(typeof(ControlImplBase), nameof(ControlImplBase.SetValue))]
+    [OptionalPatch]
+    internal static class AxisInputPatch
+    {
+        private static void Prefix(ControlImplBase __instance, ref float newValue, ControlImplBase.SetValueSource setValueSource)
+        {
+            if (setValueSource != ControlImplBase.SetValueSource.Analog || __instance == null)
+                return;
+            var widened = __instance.GetComponent<TrainBrakeHandle>();
+            if (widened != null)
+            {
+                newValue = widened.FromAxis(newValue);
+                return;
+            }
+            var independent = __instance.GetComponent<IndependentHandle>();
+            if (independent != null)
+                newValue = independent.FromAxis(newValue);
         }
     }
 

@@ -14,20 +14,22 @@ namespace RealisticBrakes.Core
     /// </summary>
     public sealed class CarBrake
     {
-        /// <summary>A car <paramref name="length"/> m long, with a car's valve or an engine's brake (at most one).</summary>
-        public CarBrake(double length, PipeGeometry geometry, ICarValve valve = null, LocomotiveBrake locomotive = null)
+ public CarBrake(double length, PipeGeometry geometry, ICarValve valve = null, LocomotiveBrake locomotive = null, VacuumEngine vacuumEngine = null)
         {
             if (!(length > 0))
                 throw new ArgumentOutOfRangeException(nameof(length), length, "A car needs a positive length.");
-            if (valve != null && locomotive != null)
-                throw new ArgumentException("A car has a valve or an engine's brake, not both.");
+            if ((valve != null ? 1 : 0) + (locomotive != null ? 1 : 0) + (vacuumEngine != null ? 1 : 0) > 1)
+                throw new ArgumentException("A car has a valve or an engine's brake, not two.");
             Length = length;
             PipeSection = new Chamber((geometry ?? PipeGeometry.Uic()).SectionVolume(length));
             Valve = valve;
             Locomotive = locomotive;
+            VacuumEngine = vacuumEngine;
             var chambers = new List<Chamber> { PipeSection };
             if (valve != null)
                 chambers.AddRange(valve.Chambers);
+            if (vacuumEngine != null)
+                chambers.AddRange(vacuumEngine.Chambers);
             if (locomotive != null)
             {
                 chambers.Add(locomotive.MainReservoir);
@@ -60,6 +62,9 @@ namespace RealisticBrakes.Core
         /// <summary>The engine's air brake, or null.</summary>
         public LocomotiveBrake Locomotive { get; }
 
+ public VacuumCylinder VacuumCylinder => Valve as VacuumCylinder;
+
+ public VacuumEngine VacuumEngine { get; }
 
         /// <summary>A leak between the car's pipe and the air (whichever way the air runs), or a closed orifice for none.</summary>
         public Orifice PipeLeak { get; set; }
@@ -77,7 +82,7 @@ namespace RealisticBrakes.Core
         public double OutsideVentFlow { get; private set; }
 
         /// <summary>The car's brake cylinder, or null when it has none of its own.</summary>
-        public Chamber Cylinder => Locomotive?.Cylinder ?? Valve?.Cylinder;
+        public Chamber Cylinder => Locomotive?.Cylinder ?? VacuumEngine?.Cylinder ?? Valve?.Cylinder;
 
         /// <summary>The car's brake cylinder pressure, gauge Pa (0 without one).</summary>
         public double CylinderGauge => Cylinder == null ? 0 : Math.Max(0, Cylinder.Pressure - Air.Atmosphere);
@@ -100,11 +105,16 @@ namespace RealisticBrakes.Core
         /// </summary>
         public bool? BrakeValveCutOut => Locomotive?.DriverValve == null ? (bool?)null : !Locomotive.DriverValve.CutIn;
 
+        /// <summary>Whether this car is an engine whose own brake can be bailed off.</summary>
+        public bool CanBail => Locomotive != null || (VacuumEngine != null && VacuumEngine.CanBailOff);
+
         /// <summary>
         /// <paramref name="part"/>'s pressure now, gauge Pa, for the public API; NaN where the car has no such part.
         /// </summary>
         public double GaugePressure(BrakePart part)
         {
+            if (VacuumCylinder != null || VacuumEngine != null)
+                return double.NaN;
             Chamber chamber;
             switch (part)
             {
@@ -141,6 +151,7 @@ namespace RealisticBrakes.Core
         {
             PipeSection.Pressure = pressure;
             Valve?.ChargeTo(pressure);
+            VacuumEngine?.ChargeTo(pressure);
             if (Locomotive != null)
             {
                 Locomotive.Distributor.ChargeTo(pressure);
@@ -156,6 +167,7 @@ namespace RealisticBrakes.Core
         {
             Valve?.Step(PipeSection, dt);
             Locomotive?.Step(PipeSection, dt);
+            VacuumEngine?.Step(PipeSection, dt);
             if (PipeLeak.IsOpen)
                 PipeLeak.OpenToAtmosphere(PipeSection, dt);
             OutsideVentFlow = OutsideVent && dt > 0 ? Math.Abs(OutsideVentPort.OpenToAtmosphere(PipeSection, dt)) / dt : 0;

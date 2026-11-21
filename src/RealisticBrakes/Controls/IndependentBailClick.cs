@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using DV.CabControls;
 using RealisticBrakes.Sim;
 using UnityEngine;
@@ -14,6 +15,8 @@ namespace RealisticBrakes.Controls
 
         // Less than this bailed, gauge Pa (0.05 bar), is nothing bailed.
         private const double MinNoticed = 5000;
+
+        private const double MinNoticedShare = 0.013;
 
         /// <summary>How fast a held lever bails an E-T engine off, Pa/s: its 3.8 bar full service in about 4 s.</summary>
         public const double BailRate = 1.0 * Core.Air.Bar;
@@ -35,17 +38,93 @@ namespace RealisticBrakes.Controls
         /// <summary>The <see cref="NetActionKind.Bail"/> subs: a full bail (0), a graduated one of the value in <see cref="NetUnit"/>s, 0 for still held (1), and the lever let go (2).</summary>
         public const byte FullBail = 0, GraduatedBail = 1, BailLetGo = 2;
 
-        // A graduated bail made here and not yet sent, Pa, and when it was last sent; whether the lever is held in release.
-        private double unsent;
-        private double bailedThisHold;
-        private float sentAt;
-        private bool holdingRelease;
         private const float SendEvery = 0.25f;
+
+        // Unified graduated-bail state per engine so simultaneous lever, key, and notch inputs (or two cabs on one engine)
+        // never double-apply BailRate in one frame or send BailLetGo while another input is still holding.
+        private sealed class EngineHold
+        {
+            public int ActiveInputs;
+            public int LastBailedFrame = -1;
+            public double Unsent;
+            public double BailedThisHold;
+            public float SentAt;
+            public bool HoldingRelease;
+
+            public void Step(TrainCar car, double amount, bool byKey, bool sendNow = true)
+            {
+                if (!Main.Active || (!byKey && !Main.Settings.ClickToBailOff) || car == null)
+                    return;
+                HoldingRelease = true;
+                if (LastBailedFrame == Time.frameCount)
+                    return;
+                LastBailedFrame = Time.frameCount;
+                var bailed = BailConsist(car, false, amount);
+                Unsent += bailed;
+                BailedThisHold += bailed;
+                if (sendNow && Time.time - SentAt >= SendEvery)
+                    Send(car, final: false);
+            }
+
+            public void StepOnce(TrainCar car, double amount, bool byKey)
+            {
+                if (!Main.Active || (!byKey && !Main.Settings.ClickToBailOff) || car == null)
+                    return;
+                var bailed = BailConsist(car, false, amount);
+                Unsent += bailed;
+                BailedThisHold += bailed;
+                if (ActiveInputs == 0)
+                    End(car);
+            }
+
+            public void End(TrainCar car)
+            {
+                Send(car, final: true);
+                if (HoldingRelease && car != null)
+                {
+                    HoldingRelease = false;
+                    LetGoConsist(car);
+                    Net.Report(new NetAction(car, NetActionKind.Bail, BailLetGo, 0));
+                }
+                if (BailedThisHold > MinNoticed)
+                    Notice.Show($"Bailed off {BailedThisHold / Core.Air.Bar:F1} bar of the engine's brake; the train's stays on");
+                BailedThisHold = 0;
+            }
+
+            // Sends quantized GraduatedBail steps, carrying the signed remainder across intervals so repeated sends never
+            // drift between guests and host; only clears Unsent when the hold ends.
+            private void Send(TrainCar car, bool final)
+            {
+                SentAt = Time.time;
+                if (car == null)
+                    return;
+                var sent = false;
+                while (Unsent >= NetUnit / 2)
+                {
+                    var units = (byte)Mathf.Clamp(Mathf.RoundToInt((float)(Unsent / NetUnit)), 1, 255);
+                    Net.Report(new NetAction(car, NetActionKind.Bail, GraduatedBail, units));
+                    Unsent -= units * NetUnit;
+                    sent = true;
+                }
+                if (final)
+                    Unsent = 0;
+                else if (!sent && HoldingRelease)
+                    Net.Report(new NetAction(car, NetActionKind.Bail, GraduatedBail, 0));
+            }
+        }
+
+        private static readonly ConditionalWeakTable<TrainCar, EngineHold> holds = new ConditionalWeakTable<TrainCar, EngineHold>();
 
         private ControlImplBase control;
         private IndependentHandle handle;
+        private TrainCar holdCar;
+        private bool leverHeld;
         private bool notchHeld;
         private bool keyHeld;
+        private bool keyGraduated;
+        private float keyDownAt = float.NegativeInfinity;
+        // One lever component polls BailOffKey per car so two-cab engines don't double-bail or double-tap.
+        private static IndependentBailClick keyPoller;
         private VRTK_InteractableObject vrLever;
         private float grabbedAt = float.NegativeInfinity;
         private float valueAtGrab;
@@ -90,6 +169,14 @@ namespace RealisticBrakes.Controls
             }
             if (vrLever != null)
                 vrLever.InteractableObjectUsed -= OnUsed;
+            grabbedAt = float.NegativeInfinity;
+            keyHeld = false;
+            keyDownAt = float.NegativeInfinity;
+            SetInput(ref leverHeld, false);
+            SetInput(ref keyGraduated, false);
+            SetInput(ref notchHeld, false);
+            if (keyPoller == this)
+                keyPoller = null;
         }
 
         private void OnGrabbed(ControlImplBase lever)
@@ -102,10 +189,10 @@ namespace RealisticBrakes.Controls
         {
             var click = Time.time - grabbedAt <= ClickTime && Mathf.Abs(lever.Value - valueAtGrab) < ClickTravel;
             grabbedAt = float.NegativeInfinity;
-            EndHold();
+            SetInput(ref leverHeld, false);
             if (!click || !Main.Active || !Main.Settings.ClickToBailOff || Car == null)
                 return;
-            if (Graduated(Car))
+            if (GraduatedOnly(Car))
             {
                 if (AutomaticApplied(Car))
                     Notice.Show(ReleaseNotch
@@ -121,14 +208,14 @@ namespace RealisticBrakes.Controls
         // The use button pressed and let go while this lever is held, in VR.
         private void OnUsed(object sender, InteractableObjectEventArgs e)
         {
-            if (Car != null && Graduated(Car))
-                BailBy(BailStep, true);
+            if (Car != null && GraduatedOnly(Car))
+                holds.GetOrCreateValue(Car).StepOnce(Car, BailStep, byKey: false);
             else
                 Bail();
         }
 
-        // An E-T engine's lever held still past a click bails it off while it's held. Not in VR, where a hand rests on a lever
-        // while it's held and the trigger bails (the review, 2026-10-28).
+        // An E-T or European engine's lever held still past a click bails it off graduated while held. Not in VR, where a hand
+        // rests on a lever while it's held and the trigger bails (the review, 2026-10-28).
         private void Update()
         {
             PollBailOffKey();
@@ -136,51 +223,133 @@ namespace RealisticBrakes.Controls
             if (float.IsNegativeInfinity(grabbedAt) || control == null || vrLever != null || ReleaseNotch)
                 return;
             var still = Mathf.Abs(control.Value - valueAtGrab) < ClickTravel;
-            if (!still || Time.time - grabbedAt <= ClickTime || !Main.Active || !Main.Settings.ClickToBailOff || Car == null || !Graduated(Car))
+            if (!still || Time.time - grabbedAt <= ClickTime || !Main.Active || !Main.Settings.ClickToBailOff || Car == null || !CanGraduate(Car))
             {
-                EndHold();
+                SetInput(ref leverHeld, false);
                 return;
             }
-            holdingRelease = true;
-            BailBy(BailRate * Time.deltaTime, false);
-            if (Time.time - sentAt >= SendEvery)
-                Send();
+            SetInput(ref leverHeld, true);
+            holds.GetOrCreateValue(Car).Step(Car, BailRate * Time.deltaTime, byKey: false);
         }
 
-        // The bail-off key, on the engine the player is on: a full bail as it's pressed, or on the E-T a graduated one while
-        // it's held.
+        // The bail-off key, on the engine the player is on: on American 26-L diesels a press bails in full; on the E-T it
+        // bails graduated while held; on European engines a quick tap bails in full and holding past ClickTime graduates off.
         private void PollBailOffKey()
         {
             var key = Main.Settings?.BailOffKey;
             var mine = key != null && key.keyCode != KeyCode.None && Main.Active && Car != null && PlayerManager.Car == Car;
-            if (mine && !Graduated(Car))
+            if (mine)
             {
+                if (keyPoller != null && keyPoller != this && keyPoller.isActiveAndEnabled && keyPoller.Car == Car)
+                    return;
+                keyPoller = this;
+            }
+            else if (keyPoller == this)
+                keyPoller = null;
+
+            if (mine && !CanGraduate(Car))
+            {
+                if (keyHeld)
+                {
+                    keyHeld = false;
+                    keyDownAt = float.NegativeInfinity;
+                    SetInput(ref keyGraduated, false);
+                }
                 if (key.Down())
                     Bail(byKey: true);
                 return;
             }
+            if (mine && GraduatedOnly(Car))
+            {
+                if (key.Pressed())
+                {
+                    keyHeld = true;
+                    SetInput(ref keyGraduated, true);
+                    holds.GetOrCreateValue(Car).Step(Car, BailRate * Time.deltaTime, byKey: true);
+                }
+                else if (keyHeld)
+                {
+                    keyHeld = false;
+                    keyDownAt = float.NegativeInfinity;
+                    SetInput(ref keyGraduated, false);
+                }
+                return;
+            }
+            // European engines: start timing only on the key-down edge so a second cab taking over mid-press never
+            // triggers a spurious full bail on release.
+            if (!keyHeld)
+            {
+                if (mine && key.Down())
+                {
+                    keyHeld = true;
+                    keyDownAt = Time.time;
+                }
+                return;
+            }
+            var elapsed = Time.time - keyDownAt;
             if (mine && key.Pressed())
             {
-                keyHeld = true;
-                holdingRelease = true;
-                BailBy(BailRate * Time.deltaTime, false, byKey: true);
-                if (Time.time - sentAt >= SendEvery)
-                    Send();
+                if (elapsed > ClickTime)
+                {
+                    SetInput(ref keyGraduated, true);
+                    holds.GetOrCreateValue(Car).Step(Car, BailRate * Time.deltaTime, byKey: true);
+                }
+                return;
             }
-            else if (keyHeld)
+            var wasGraduated = keyGraduated;
+            keyHeld = false;
+            keyDownAt = float.NegativeInfinity;
+            if (wasGraduated)
             {
-                keyHeld = false;
-                EndHold();
+                SetInput(ref keyGraduated, false);
             }
+            else if (mine)
+            {
+                if (elapsed <= ClickTime)
+                    Bail(byKey: true);
+                else
+                {
+                    var hold = holds.GetOrCreateValue(Car);
+                    if (hold.ActiveInputs == 0)
+                    {
+                        var overshoot = Mathf.Min(Time.deltaTime, elapsed - ClickTime);
+                        if (overshoot > 0f)
+                        {
+                            hold.Step(Car, BailRate * overshoot, byKey: true, sendNow: false);
+                            hold.End(Car);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void SetInput(ref bool flag, bool active)
+        {
+            if (flag == active)
+                return;
+            flag = active;
+            var target = active ? Car : holdCar;
+            if (target == null)
+                return;
+            var hold = holds.GetOrCreateValue(target);
+            if (active)
+            {
+                holdCar = target;
+                hold.ActiveInputs++;
+            }
+            else if (hold.ActiveInputs > 0 && --hold.ActiveInputs == 0)
+            {
+                hold.End(target);
+            }
+            if (!leverHeld && !keyGraduated && !notchHeld)
+                holdCar = null;
         }
 
         private void Bail(bool byKey = false)
         {
             if (!Main.Active || (!byKey && !Main.Settings.ClickToBailOff) || Car == null)
                 return;
-            BailConsist(Car, true);
-            // Everyone else's engines bail the same (multiplayer).
-            Net.Report(new NetAction(Car, NetActionKind.Bail, FullBail, 0));
+            BailFull(Car, notice: true);
         }
 
         // Whether this lever is the S-6 handle with the release notch (IndependentHandle).
@@ -201,76 +370,87 @@ namespace RealisticBrakes.Controls
         /// </summary>
         internal void HoldRelease(bool held)
         {
-            if (held)
+            if (held && Car != null)
             {
-                notchHeld = true;
-                holdingRelease = true;
-                BailBy(BailRate * Time.deltaTime, false, byKey: true);
-                if (Time.time - sentAt >= SendEvery)
-                    Send();
+                SetInput(ref notchHeld, true);
+                holds.GetOrCreateValue(Car).Step(Car, BailRate * Time.deltaTime, byKey: true);
             }
             else if (notchHeld)
             {
-                notchHeld = false;
-                EndHold();
+                SetInput(ref notchHeld, false);
             }
         }
 
-        // A graduated bail of amount, Pa, here; sent on now if send, or with the next. The click's, unless by the release notch
-        // or the key, which the click setting doesn't turn off.
-        private void BailBy(double amount, bool send, bool byKey = false)
-        {
-            if (!Main.Active || (!byKey && !Main.Settings.ClickToBailOff) || Car == null)
-                return;
-            var bailed = BailConsist(Car, false, amount);
-            unsent += bailed;
-            bailedThisHold += bailed;
-            if (send)
-                EndHold();
-        }
-
-        // The hold ends: the rest of its bail goes to the other players, then the let-go, and the player hears what was bailed.
-        private void EndHold()
-        {
-            Send();
-            if (holdingRelease && Car != null)
-            {
-                holdingRelease = false;
-                Net.Report(new NetAction(Car, NetActionKind.Bail, BailLetGo, 0));
-            }
-            if (bailedThisHold > MinNoticed)
-                Notice.Show($"Bailed off {bailedThisHold / Core.Air.Bar:F1} bar of the engine's brake; the train's stays on");
-            bailedThisHold = 0;
-        }
-
-        // The bail made since the last send; while the lever is held in release with nothing more to let out, a word that it's
-        // still held, as in the engine's own emergency the bail lasts only while it's held (the second review, 2026-10-28).
-        private void Send()
-        {
-            sentAt = Time.time;
-            if (Car == null)
-                return;
-            var sent = false;
-            while (unsent >= NetUnit / 2)
-            {
-                var units = (byte)Mathf.Clamp(Mathf.RoundToInt((float)(unsent / NetUnit)), 1, 255);
-                Net.Report(new NetAction(Car, NetActionKind.Bail, GraduatedBail, units));
-                unsent -= units * NetUnit;
-                sent = true;
-            }
-            unsent = 0;
-            if (!sent && holdingRelease)
-                Net.Report(new NetAction(Car, NetActionKind.Bail, GraduatedBail, 0));
-        }
-
-        // Whether car's engine bails off graduated: the E-T's (Core.LocomotiveBrakeSpec.HoldsAutomaticBrake).
-        private static bool Graduated(TrainCar car) =>
+        // Whether car's engine bails off only graduated (no full-bail click): the E-T's (Core.LocomotiveBrakeSpec.HoldsAutomaticBrake).
+        private static bool GraduatedOnly(TrainCar car) =>
             car.brakeSystem != null && BrakeSets.TryGet(car.brakeSystem, out var air) && air.Brake.Locomotive != null
             && air.Brake.Locomotive.Spec.HoldsAutomaticBrake;
+
+        // Whether car's engine supports graduated bail-off while held: E-T engines and European engines.
+        private static bool CanGraduate(TrainCar car) =>
+            car.brakeSystem != null && BrakeSets.TryGet(car.brakeSystem, out var air) && air.Brake.Locomotive != null
+            && (air.Brake.Locomotive.Spec.HoldsAutomaticBrake || air.Brake.Locomotive.Spec.GraduatedBail);
 
         private static bool AutomaticApplied(TrainCar car) =>
             car.brakeSystem != null && BrakeSets.TryGet(car.brakeSystem, out var air) && air.Brake.Locomotive != null
             && air.Brake.Locomotive.AutomaticApplied && air.Brake.Locomotive.BailedOff < air.Brake.Locomotive.HeldAutomatic;
+
+        internal delegate bool TryGetBrake<TCar>(TCar car, out Core.CarBrake brake, out System.Action touch);
+
+        /// <summary>
+        /// Whether <paramref name="car"/> is itself a modeled engine whose
+        /// brake can be bailed off (guards multiple-unit traversal so a
+        /// non-engine such as a slug on an MU cable cannot bail a coupled
+        /// engine).
+        /// </summary>
+        internal static bool CanBailCar(TrainCar car) =>
+            TryGetCarBrake(car, out var brake, out _) && brake.CanBail;
+
+        private static bool TryGetCarBrake(TrainCar car, out Core.CarBrake brake, out System.Action touch)
+        {
+            if (car != null && car.brakeSystem != null && BrakeSets.TryGet(car.brakeSystem, out var air))
+            {
+                brake = air.Brake;
+                touch = air.Touch;
+                return true;
+            }
+            brake = null;
+            touch = null;
+            return false;
+        }
+
+        /// <summary>
+        /// Bails off <paramref name="car"/> and the engines on its multiple-unit
+        /// cables in full, and reports the bail to multiplayer. Tells the player
+        /// when <paramref name="notice"/>. Returns the cylinder pressure bailed
+        /// on <paramref name="car"/>, gauge Pa (0 when inactive, null, not an
+        /// engine that can bail, or nothing to bail).
+        /// </summary>
+        internal static double BailFull(TrainCar car, bool notice) =>
+            !Main.Active || car == null
+                ? 0
+                : BailFull(car, notice, TryGetCarBrake, Consist, c => Net.Report(new NetAction(c, NetActionKind.Bail, FullBail, 0)));
+
+        internal static double BailFull<TCar>(
+            TCar car,
+            bool notice,
+            TryGetBrake<TCar> tryGetBrake,
+            System.Func<TCar, IEnumerable<TCar>> consist,
+            System.Action<TCar> report) where TCar : class
+        {
+            if (car == null || !tryGetBrake(car, out var startBrake, out _))
+                return 0;
+            if (!startBrake.CanBail)
+            {
+                if (notice && startBrake.VacuumEngine != null && !startBrake.VacuumEngine.CanBailOff)
+                    Notice.Show("A steam brake can't be bailed off: it follows the train pipe, and comes off as the vacuum comes back");
+                return 0;
+            }
+            BailConsist(car, notice, double.PositiveInfinity, Core.LocomotiveBrake.BailHold, tryGetBrake, consist, out var carBailed);
+            // Everyone else's engines bail the same (multiplayer).
+            report(car);
+            return carBailed;
+        }
 
         /// <summary>
         /// Bails off <paramref name="car"/> and the engines on its multiple-unit
@@ -278,26 +458,58 @@ namespace RealisticBrakes.Controls
         /// graduated. Tells the player of a full bail, when
         /// <paramref name="notice"/>. Returns the most bailed off any engine, Pa.
         /// </summary>
-        internal static double BailConsist(TrainCar car, bool notice, double amount = double.PositiveInfinity, double hold = Core.LocomotiveBrake.BailHold)
+        internal static double BailConsist(TrainCar car, bool notice, double amount = double.PositiveInfinity, double hold = Core.LocomotiveBrake.BailHold) =>
+            !Main.Active || car == null ? 0 : BailConsist(car, notice, amount, hold, TryGetCarBrake, Consist, out _);
+
+        private static double BailConsist<TCar>(
+            TCar car,
+            bool notice,
+            double amount,
+            double hold,
+            TryGetBrake<TCar> tryGetBrake,
+            System.Func<TCar, IEnumerable<TCar>> consist,
+            out double carBailed) where TCar : class
         {
-            if (!Main.Active || car == null)
+            carBailed = 0;
+            if (car == null || !tryGetBrake(car, out var startBrake, out _) || !startBrake.CanBail)
                 return 0;
             var engines = 0;
             var bailed = 0;
             var most = 0.0;
-            foreach (var each in Consist(car))
+            foreach (var each in consist(car))
             {
-                if (each.brakeSystem == null || !BrakeSets.TryGet(each.brakeSystem, out var air) || air.Brake.Locomotive == null)
+                if (each == null || !tryGetBrake(each, out var brake, out var touch))
+                    continue;
+                var vacuum = brake.VacuumEngine;
+                if (vacuum != null)
+                {
+                    engines++;
+                    if (vacuum.CanBailOff && double.IsPositiveInfinity(amount))
+                    {
+                        var dropped = BailEngine(brake, touch);
+                        most = System.Math.Max(most, dropped);
+                        if (ReferenceEquals(each, car))
+                            carBailed = dropped;
+                    }
+                    if (vacuum.BailedOff > MinNoticedShare)
+                        bailed++;
+                    continue;
+                }
+                if (brake.Locomotive == null)
                     continue;
                 engines++;
+                double droppedAir;
                 if (double.IsPositiveInfinity(amount))
-                    Api.BailOff(each);
+                    droppedAir = BailEngine(brake, touch);
                 else
                 {
-                    air.Touch();
-                    most = System.Math.Max(most, air.Brake.Locomotive.BailOffBy(amount, hold));
+                    touch?.Invoke();
+                    droppedAir = brake.Locomotive.BailOffBy(amount, hold);
                 }
-                if (air.Brake.Locomotive.BailedOff > MinNoticed)
+                most = System.Math.Max(most, droppedAir);
+                if (ReferenceEquals(each, car))
+                    carBailed = droppedAir;
+                if (brake.Locomotive.BailedOff > MinNoticed)
                     bailed++;
             }
             if (engines == 0 || !notice)
@@ -308,10 +520,22 @@ namespace RealisticBrakes.Controls
             return most;
         }
 
+        private static double BailEngine(Core.CarBrake brake, System.Action touch)
+        {
+            var vacuum = brake.VacuumEngine;
+            if (vacuum != null)
+            {
+                touch?.Invoke();
+                return vacuum.BailOff() * vacuum.Spec.AirBrakeMaximum;
+            }
+            touch?.Invoke();
+            return brake.Locomotive.BailOff();
+        }
+
         /// <summary>Another player let go of the independent: <paramref name="car"/>'s consist's bail holds no longer.</summary>
         internal static void LetGoConsist(TrainCar car)
         {
-            if (!Main.Active || car == null)
+            if (!Main.Active || !CanBailCar(car))
                 return;
             foreach (var each in Consist(car))
                 if (each.brakeSystem != null && BrakeSets.TryGet(each.brakeSystem, out var air) && air.Brake.Locomotive != null)

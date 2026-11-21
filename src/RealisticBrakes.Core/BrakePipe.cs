@@ -44,6 +44,17 @@ namespace RealisticBrakes.Core
 
         public static PipeGeometry Uic() => new PipeGeometry();
 
+ public static PipeGeometry VacuumTrainPipe()
+        {
+            const double bore = 2 * 0.0254;
+            return new PipeGeometry
+            {
+                Bore = bore,
+                FrictionBore = 0.8 * bore,
+                HoseVolume = 2 * 0.635 * Math.PI * bore * bore / 4,
+                OpenEnd = new Orifice(bore * 1000),
+            };
+        }
     }
 
     /// <summary>
@@ -83,7 +94,10 @@ namespace RealisticBrakes.Core
             linkLength = new double[links];
             linkFlow = new double[links];
             for (var i = 0; i < links; i++)
-                linkLength[i] = Math.Max(1.0, (carLengths[i] + carLengths[i + 1]) / 2);
+            {
+                var length = (carLengths[i] + carLengths[i + 1]) / 2;
+                linkLength[i] = double.IsNaN(length) || double.IsInfinity(length) || length < 1.0 ? 1.0 : length;
+            }
             area = geometry.Area;
             frictionBore = geometry.FrictionBore;
             frictionArea = Math.PI * frictionBore * frictionBore / 4;
@@ -149,9 +163,9 @@ namespace RealisticBrakes.Core
                 oldLinks[(old.sections[i], old.sections[i + 1])] = old.linkFlow[i];
             for (var i = 0; i < linkFlow.Length; i++)
             {
-                if (oldLinks.TryGetValue((sections[i], sections[i + 1]), out var flow))
+                if (oldLinks.TryGetValue((sections[i], sections[i + 1]), out var flow) && IsFinite(flow))
                     linkFlow[i] = flow;
-                else if (oldLinks.TryGetValue((sections[i + 1], sections[i]), out flow))
+                else if (oldLinks.TryGetValue((sections[i + 1], sections[i]), out flow) && IsFinite(flow))
                     linkFlow[i] = -flow;
             }
         }
@@ -159,28 +173,42 @@ namespace RealisticBrakes.Core
         /// <summary>Advances the air in the pipe <paramref name="dt"/> s; keep <paramref name="dt"/> under <see cref="MaxStableStep"/>.</summary>
         public void Step(double dt)
         {
+            if (!(dt > 0) || double.IsInfinity(dt))
+            {
+                FrontVentFlow = 0;
+                RearVentFlow = 0;
+                return;
+            }
             for (var i = 0; i < linkFlow.Length; i++)
             {
                 var a = sections[i].Pressure;
                 var b = sections[i + 1].Pressure;
-                var density = Air.Density(Math.Max(1, (a + b) / 2));
+                var mean = 0.5 * a + 0.5 * b;
+                var density = Air.Density(mean > 1 ? mean : 1);
                 var flow = linkFlow[i];
                 // Friction as a drag on the column, treated implicitly: dṁ/dt = (A/ℓ)Δp − A·λ·ṁ|ṁ|/(2ρ·D_f·A_f²).
                 var drag = area * FrictionTimesFlow(Math.Abs(flow)) / (2 * density * frictionBore * frictionArea * frictionArea);
-                linkFlow[i] = (flow + dt * area / linkLength[i] * (a - b)) / (1 + dt * drag);
+                var next = (flow + dt * area / linkLength[i] * (a - b)) / (1 + dt * drag);
+                linkFlow[i] = IsFinite(next) ? next : 0;
             }
             for (var i = 0; i < linkFlow.Length; i++)
             {
                 var moved = linkFlow[i] * dt;
+                if (!IsFinite(moved))
+                    continue;
                 sections[i].Mass -= moved;
                 sections[i + 1].Mass += moved;
             }
-            FrontVentFlow = Vent(FrontOpen, FrontHoseVent, sections[0], dt);
-            RearVentFlow = Vent(RearOpen, RearHoseVent, sections[sections.Length - 1], dt);
+            var frontVent = Vent(FrontOpen, FrontHoseVent, sections[0], dt);
+            var rearVent = Vent(RearOpen, RearHoseVent, sections[sections.Length - 1], dt);
+            FrontVentFlow = IsFinite(frontVent) ? frontVent : 0;
+            RearVentFlow = IsFinite(rearVent) ? rearVent : 0;
             foreach (var s in sections)
                 if (s.Mass < 0)
                     s.Mass = 0;
         }
+
+        private static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
         // An end's flow through its open cock, whichever way it runs, or through the closed cock's vent beside it, kg/s.
         private double Vent(bool open, bool hoseVent, Chamber end, double dt) =>

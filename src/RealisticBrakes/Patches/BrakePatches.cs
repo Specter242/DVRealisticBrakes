@@ -202,7 +202,7 @@ namespace RealisticBrakes.Patches
         [HarmonyPatch(nameof(BrakeSystem.SetMainReservoirPressure))]
         private static void MainReservoirSet(BrakeSystem __instance, float value)
         {
-            var reservoir = BrakeSets.TryGet(__instance, out var air) ? air.Brake.Locomotive?.MainReservoir : null;
+            var reservoir = BrakeSets.TryGet(__instance, out var air) ? air.Brake.Locomotive?.MainReservoir ?? air.Brake.VacuumEngine?.MainReservoir : null;
             if (reservoir != null)
             {
                 reservoir.Pressure = CarAir.Pa(value);
@@ -246,12 +246,13 @@ namespace RealisticBrakes.Patches
         {
             if (!BrakeSets.TryGet(system, out var air) || air.Brake.Cylinder == null)
                 return;
+            if (air.IsVacuum)
+                return;
             air.Brake.Cylinder.Pressure = CarAir.Pa(system.brakeCylinderPressureUnsmoothed);
             air.Touch();
         }
 
-        // A value set in a stock field.
-        private static double FromStock(CarAir air, double pascals) => pascals;
+        private static double FromStock(CarAir air, double pascals) => air.IsVacuum ? Core.Vacuum.FromAirEquivalent(pascals) : pascals;
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(BrakeSystem.ResetState))]

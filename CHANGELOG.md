@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.5.0 (2026-11-21)
+
+- New: the vacuum brake, a third brake equipment choice, as British railways
+  ran it at 21 inches: graduated both ways, and slow on long trains. On
+  steam engines the air pump wheel works the small ejector and the brake
+  handle's release notch the large one, and the engine brakes by steam;
+  diesels have exhausters and can bail off their own brake. The brake
+  gauges, the brake controls' text, and the overlay read in inches of
+  vacuum. The cars' direct admission valves and the ejectors' volume are
+  settings, and the Pocket-Book has a chapter on it.
+- Fixed: in multiplayer, the American steam engines' independent brake
+  handle no longer jumps out of release or quick application while another
+  player holds it there.
+- A controller axis bound to the brakes moves the handles a notch at a time
+  instead of jumping between two notches, and holds the American steam
+  engines' independent in release or quick application as a hand does.
+- On European engines, holding the independent brake lever clicked bails
+  off a little at a time; a quick click still bails off in full.
+- Clearer brake text when you look at the controls and the bleed handle,
+  flags in the brake pressure overlay, and a "Brakes won't release?"
+  checklist in the player guide.
+- Multiplayer: guests follow the host's brake settings for the whole
+  session, including the host's changes.
+- Performance improvements and bug fixes.
+
 ## 1.4.5 (2026-11-20)
 
 - Fixed: on European equipment, closing the end cocks between two cars one

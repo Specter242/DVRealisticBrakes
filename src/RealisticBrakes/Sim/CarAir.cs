@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using DV;
 using DV.Simulation.Brake;
 using DV.ThingTypes;
 using HarmonyLib;
@@ -11,7 +8,7 @@ using UnityEngine;
 
 namespace RealisticBrakes.Sim
 {
- internal sealed class CarAir
+ internal sealed partial class CarAir
     {
         /// <summary>The internal field holding the main reservoir's pressure before the readout's smoothing.</summary>
         internal static readonly AccessTools.FieldRef<BrakeSystem, float> MainReservoirUnsmoothed =
@@ -42,6 +39,7 @@ namespace RealisticBrakes.Sim
             forceOverridden = rigging != null;
         }
 
+ public bool IsVacuum { get; private set; }
 
         /// <summary>The freight car's rigging, whose force is its own rather than its load's; null for cars the game's force stays on (engines, tenders, coaches).</summary>
         public BrakeRigging Rigging { get; }
@@ -60,6 +58,9 @@ namespace RealisticBrakes.Sim
 
         /// <summary>Whether the model ran this car this frame, so the stock air methods stand aside.</summary>
         public bool Handled { get; set; }
+
+        /// <summary>Frame stamp written by <see cref="HandBrakeHold"/> while this car's freeze is scaled; 0 when not held.</summary>
+        internal int HoldStamp;
 
         // The main reservoir pressure last written to the stock field, to notice another mod's direct writes.
         private float writtenMainReservoir = float.NaN;
@@ -88,13 +89,12 @@ namespace RealisticBrakes.Sim
         public float ExhaustFlow { get; private set; }
 
         /// <summary>Whether the car has no brake of its own in the model: a tender or slug, whose cylinders the stock code copies from its engine.</summary>
-        private bool CopiesItsEngine => Brake.Valve == null && Brake.Locomotive == null;
+        private bool CopiesItsEngine => Brake.Valve == null && Brake.Locomotive == null && Brake.VacuumEngine == null;
 
         /// <summary>The car's pipe pressure as the stock field holds it, bar absolute, for its gauge.</summary>
         public float PipeBar => Bar(Stock(Brake.PipeSection.Pressure));
 
-        /// <summary><paramref name="pascals"/> as the stock fields hold it.</summary>
-        private double Stock(double pascals) => pascals;
+ private double Stock(double pascals) => IsVacuum ? Core.Vacuum.AirEquivalent(pascals) : pascals;
 
         /// <summary>Builds a car's air from its brake setup and the pressures the game holds for it now.</summary>
         public static CarAir Create(BrakeSystem system, float pipePressure, int generation)
@@ -105,6 +105,8 @@ namespace RealisticBrakes.Sim
             var pipe = Pa(pipePressure);
             CarBrake brake;
             var american = Main.Settings.Equipment == Equipment.American;
+            if (Main.Settings.Equipment == Equipment.Vacuum)
+                return CreateVacuum(system, car, length, geometry, pipe, generation);
             if (system.hasCompressor)
             {
                 // An engine carries its own prototype's standard (EngineStandards; the cars keep the setting). American
@@ -152,6 +154,73 @@ namespace RealisticBrakes.Sim
             return new CarAir(system, car, brake, generation, RiggingFor(car));
         }
 
+ private static CarAir CreateVacuum(BrakeSystem system, TrainCar car, double length, PipeGeometry geometry, double stockPipe, int generation)
+        {
+            var pipe = Core.Vacuum.FromAirEquivalent(stockPipe);
+            CarBrake brake;
+            if (system.hasCompressor)
+            {
+                var spec = IsSteam(car) ? VacuumEngineSpec.Steam() : VacuumEngineSpec.Diesel();
+                if (system.mainResVolume > 0)
+                    spec.MainReservoirVolume = system.mainResVolume / 1000.0;
+                var engine = new VacuumEngine(spec);
+                brake = new CarBrake(length, geometry, vacuumEngine: engine);
+                engine.MainReservoir.Pressure = Pa(MainReservoirUnsmoothed(system));
+                engine.RestoreOwnBrake(spec.SteamBrake
+                    ? BrakeRigging.StockBrakingFactor(Pa(system.brakeCylinderPressureUnsmoothed) - Air.Atmosphere)
+                    : (Pa(Mathf.Max(1f, system.brakeCylinderPressureUnsmoothed)) - Air.Atmosphere) / spec.AirBrakeMaximum);
+            }
+            else if (system.brakeCylinderPressureCalculation == BrakeSystem.BrakeCylinderPressureCalculation.Regular)
+            {
+                var valve = new VacuumCylinder(IsCoach(car) ? VacuumCylinderSpec.Coach() : VacuumCylinderSpec.Bogie());
+                valve.Spec.DirectAdmission = Main.Settings.DirectAdmission;
+                // The chamber from the stock auxiliary reservoir, and the underside level with the pipe.
+                valve.Restore(Core.Vacuum.FromAirEquivalent(Pa(system.auxReservoirPressure)), pipe);
+                brake = new CarBrake(length, geometry, valve);
+            }
+            else
+            {
+                // A tender or slug copying its engine's cylinders: the stock code still does the copying.
+                brake = new CarBrake(length, geometry);
+            }
+            brake.PipeSection.Pressure = pipe;
+            var air = new CarAir(system, car, brake, generation, RiggingFor(car)) { IsVacuum = true };
+            if (brake.VacuumEngine != null && brake.VacuumEngine.Spec.SteamBrake)
+            {
+                air.steamPump = SteamPumpOf(car);
+                if (air.steamPump != null)
+                {
+                    ejectors.Remove(air.steamPump);
+                    ejectors.Add(air.steamPump, air);
+                }
+                Controls.EjectorSound.Attach(car);
+            }
+            return air;
+        }
+
+        private SteamCompressor steamPump;
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SteamCompressor, CarAir> ejectors =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<SteamCompressor, CarAir>();
+
+ internal static bool TryGetEjectors(SteamCompressor pump, out VacuumEngine engine)
+        {
+            engine = null;
+            if (!ejectors.TryGetValue(pump, out var air) || !BrakeSets.TryGet(air.System, out var current) || current != air)
+                return false;
+            engine = air.Brake.VacuumEngine;
+            return engine != null;
+        }
+
+        private static SteamCompressor SteamPumpOf(TrainCar car)
+        {
+            var flow = car != null && car.SimController != null ? car.SimController.SimulationFlow : null;
+            if (flow != null)
+                foreach (var component in flow.OrderedSimComps)
+                    if (component is SteamCompressor pump)
+                        return pump;
+            return null;
+        }
+
 
         /// <summary>Whether <paramref name="car"/> is a steam engine: one with a boiler, stock or Custom Car Loader.</summary>
         internal static bool IsSteam(TrainCar car)
@@ -164,110 +233,15 @@ namespace RealisticBrakes.Sim
             return car != null && car.carLivery != null && CarTypes.IsSteamLocomotive(car.carLivery);
         }
 
- internal static bool IsAmericanEngine(TrainCar car)
+        internal static bool IsAmericanEngine(TrainCar car)
         {
             var settings = Main.Settings;
+            if (settings.Equipment == Equipment.Vacuum)
+                return false;
             var setting = settings.Equipment == Equipment.American ? AirStandard.American : AirStandard.European;
             var livery = car != null ? car.carLivery : null;
             return EngineStandards.For(settings.EveryEngineUsesSetting, setting, livery?.id, livery?.parentType?.id) == AirStandard.American;
         }
-
-        // Each car type's heaviest cargo, kg, once worked out.
-        private static readonly Dictionary<TrainCarType_v2, float> heaviestCargo = new Dictionary<TrainCarType_v2, float>();
-
-        /// <summary>A freight car's rigging, sized for its type's heaviest cargo; null for a car that carries none.</summary>
-        internal static BrakeRigging RiggingFor(TrainCar car)
-        {
-            var type = car != null && car.carLivery != null ? car.carLivery.parentType : null;
-            if (type == null || type.mass <= 0 || car.brakeSystem == null || car.brakeSystem.hasCompressor)
-                return null;
-            if (!heaviestCargo.TryGetValue(type, out var cargo))
-            {
-                cargo = 0f;
-                var cargos = Globals.G?.Types?.cargos;
-                if (cargos != null)
-                    foreach (var c in cargos)
-                        if (c != null && c.loadableCarTypes != null)
-                            foreach (var loadable in c.loadableCarTypes)
-                                if (loadable != null && loadable.carType == type)
-                                    cargo = Mathf.Max(cargo, c.massPerUnit);
-                heaviestCargo[type] = cargo;
-            }
-            return cargo > 0f ? new BrakeRigging(type.mass, type.mass + cargo * car.cargoCapacity) : null;
-        }
-
-        // Whether the bogies' force per kg is the model's rather than the game's.
-        private bool forceOverridden;
-
-        /// <summary>The freight car's force per kg as its rigging set it this frame, before the hold's scaling (<see cref="HandBrakeHold"/>).</summary>
-        public float RiggedPerKg { get; private set; }
-
- public float HeatShare
-        {
-            get
-            {
-                if (Car == null || Car.Bogies == null || Car.Bogies.Length == 0 || Car.Bogies[0] == null)
-                    return 1f;
-                var stockPerKg = Car.carLivery.parentType.brakes.MaxBrakingForcePerBogie * StockForcePerKg;
-                return stockPerKg > 0f ? Car.Bogies[0].maxBrakingForcePerKg / stockPerKg : 1f;
-            }
-        }
-
- private bool ApplyRigging()
-        {
-            var valve = Brake.Valve;
-            if (Rigging == null || valve == null || Car == null)
-                return false;
-            if (!Main.Settings.BrakeForceFromCar)
-            {
-                RestoreForce();
-                RiggedPerKg = Car.carLivery.parentType.brakes.MaxBrakingForcePerBogie * StockForcePerKg;
-                var was = valve.Load;
-                valve.Load = LoadSetting.Loaded;
-                return was != valve.Load;
-            }
-            var mass = Car.massController != null ? Car.massController.TotalMass : 0f;
-            if (mass <= 0f)
-                return false;
-            var before = valve.Load;
-            // European cars' lever by hand when the setting says so; American empty/load equipment is always automatic. An
-            // American car of the period has none: its cylinder takes full pressure, and its rigging's leverage gives the
-            // force for its empty weight (the review, 2026-10-28: run on the empty setting, every cylinder read 1.4 bar and
-            // the cars' piston travel stopped mattering).
-            var period = Brake.ControlValve != null && Main.Settings.LoadBraking == LoadBraking.Period;
-            if (period)
-                valve.Load = LoadSetting.Loaded;
-            else if (!(Main.Settings.ManualEmptyLoaded && Brake.Distributor != null))
-                valve.Load = Rigging.SettingFor(mass);
-
-            var multiplier = (float)Rigging.ForceMultiplier(BrakeRigging.StockBrakingFactor(Brake.CylinderGauge), System.handbrakePosition, mass,
-                period ? Rigging.PeriodLeverage : 1);
-            var perKg = Car.carLivery.parentType.brakes.MaxBrakingForcePerBogie * StockForcePerKg * multiplier;
-            RiggedPerKg = perKg;
-            foreach (var bogie in Car.Bogies)
-                if (bogie != null)
-                    bogie.maxBrakingForcePerKg = perKg;
-            forceOverridden = true;
-            return before != valve.Load;
-        }
-
-        /// <summary>Gives the bogies back the game's own force per kg.</summary>
-        public void RestoreForce()
-        {
-            if (!forceOverridden || Car == null)
-                return;
-            var stockPerKg = Car.carLivery.parentType.brakes.MaxBrakingForcePerBogie * StockForcePerKg;
-            foreach (var bogie in Car.Bogies)
-                if (bogie != null)
-                    bogie.maxBrakingForcePerKg = stockPerKg;
-            forceOverridden = false;
-        }
-
-        /// <summary>The game's independent over its travel, gauge Pa: 1 to 4.5 bar absolute (<c>BrakeSystem.SimulateLocoControlValve</c>).</summary>
-        internal const double CarIndependentRange = 3.5 * Air.Bar;
-
-        /// <summary>The game's per-kg factor on a car type's force per bogie (<c>Bogie.Awake</c>: 1/11,500).</summary>
-        internal const float StockForcePerKg = 8.695652E-05f;
 
         private static BrakingMode ModeFor(TrainCar car) => IsCoach(car) ? BrakingMode.Passenger : Main.Settings.FreightMode;
 
@@ -295,137 +269,6 @@ namespace RealisticBrakes.Sim
             return 7 + 2 * (hash % 1001) / 1000.0;
         }
 
-        /// <summary>
-        /// Reads the handles, the release valve, the compressor, and the
-        /// reservoir's size before the line runs. Returns whether any of them,
-        /// or a value set from outside, changed since the last frame, which
-        /// wakes a settled line.
-        /// </summary>
-        public bool BeforeStep(float pumpSpeedUp)
-        {
-            var bs = System;
-            var changed = touched | ApplyRigging();
-            touched = false;
-            // The game's bleed handle: a press is a short pull; held past a few seconds (BleedHandle), it drains the reservoirs.
-            var engine = Brake.Locomotive;
-            // Not on a tender or slug copying its engine's cylinders: the stock code that does the copying takes the pull
-            // too, and lets a detached one go. Taken here, the pull was lost and a tender uncoupled with the engine brake
-            // on stayed locked.
-            if (bs.controlReservoirPressureReleased && !CopiesItsEngine)
-            {
-                Brake.Valve?.PullRelease();
-                engine?.PullRelease();
-                bs.controlReservoirPressureReleased = false;
-                changed = true;
-            }
-            if (Brake.Valve != null && Brake.Valve.ReleaseHeld != ReleaseHeld)
-            {
-                Brake.Valve.ReleaseHeld = ReleaseHeld;
-                changed = true;
-            }
-            if (engine != null && engine.Distributor.ReleaseHeld != ReleaseHeld)
-            {
-                engine.Distributor.ReleaseHeld = ReleaseHeld;
-                changed = true;
-            }
-            // Another mod's independent on an ordinary car (Caboose Brake Handle's on the caboose, Nexus 1774): the game's
-            // independent travel, 1 to 4.5 bar absolute, fills its cylinder from its own auxiliary reservoir. Not a tender
-            // following its engine, nor an engine, whose own independent this is.
-            if (engine == null && Brake.Valve != null && bs.brakeCylinderPressureCalculation == BrakeSystem.BrakeCylinderPressureCalculation.Regular)
-            {
-                var position = Mathf.Clamp01(bs.independentBrakePosition);
-                var carIndependent = (bs.indBrakeCurve != null ? Mathf.Clamp01(bs.indBrakeCurve.Evaluate(position)) : position) * CarIndependentRange;
-                if (Math.Abs(Brake.Valve.IndependentCylinder - carIndependent) > 1)
-                {
-                    Brake.Valve.IndependentCylinder = carIndependent;
-                    changed = true;
-                }
-            }
-
-            var mainReservoir = engine?.MainReservoir;
-            if (mainReservoir == null)
-                return changed;
-            if (bs.mainResVolume > 0 && Mathf.Abs(bs.mainResVolume / 1000f - (float)mainReservoir.Volume) > 1e-4f)
-            {
-                mainReservoir.Resize(bs.mainResVolume / 1000.0);
-                changed = true;
-            }
-            // Another mod writing the stock field directly, past the setters.
-            var stock = MainReservoirUnsmoothed(bs);
-            if (!float.IsNaN(writtenMainReservoir) && Mathf.Abs(stock - writtenMainReservoir) > 1e-4f)
-            {
-                mainReservoir.Pressure = Pa(stock);
-                changed = true;
-            }
-            var compressing = bs.compressorProductionRate > 0.001f;
-            // A widened handle's new notches read as their stock neighbors: only the handle knows them.
-            var zone = TrainBrakeHandle.ZoneOf(bs);
-            // A value set from outside (the remote, a cable, a driver mod) that moves the handle off what its added notch
-            // reads as takes it out of that notch (the review, 2026-10-28: an apply and release by remote left it in holding).
-            if (zone != HandleZone.Travel && bs.trainBrakePosition != lastTrain && !TrainBrakeHandle.Stands(zone, bs.trainBrakePosition))
-            {
-                TrainBrakeHandle.ClearZone(bs);
-                zone = HandleZone.Travel;
-            }
-            if (bs.trainBrakePosition != lastTrain || bs.independentBrakePosition != lastIndependent
-                || bs.trainBrakeCutout != lastCutout || compressing || compressing != lastCompressing || zone != lastZone)
-                changed = true;
-            lastZone = zone;
-            lastTrain = bs.trainBrakePosition;
-            lastIndependent = bs.independentBrakePosition;
-            lastCutout = bs.trainBrakeCutout;
-            lastCompressing = compressing;
-
-            var valve = engine.DriverValve;
-            if (valve != null)
-            {
-                valve.CutIn = bs.trainBrakeCutout;
-                valve.Adjusting = Controls.AdjustKey.Held(Car);
-                var handle = bs.trainBrakePosition;
-                // A widened handle's added notches: a diesel's filling stroke or a steam engine's release (the H-6's), main reservoir air straight into the pipe; a diesel's emergency.
-                // A diesel's handle widened before a switch to American equipment, or another player's, keeps its stroke's notch: the 26-L has none, so it reads as release.
-                if (zone == HandleZone.Fill && bs.selfLappingController && !valve.Spec.FillingStroke)
-                    zone = HandleZone.Travel;
-                if (zone == HandleZone.Fill)
-                    valve.Position = DriverValvePosition.Fill;
-                else if (zone == HandleZone.Emergency)
-                    valve.Position = DriverValvePosition.Emergency;
-                // The H-6's holding reads as running; a value set from outside since (the remote, a cable) moves it on.
-                else if (zone == HandleZone.Holding && !bs.selfLappingController && handle <= 0.1f)
-                    valve.Position = DriverValvePosition.Holding;
-                else if (bs.selfLappingController)
-                {
-                    var t = bs.trainBrakeCurve != null ? bs.trainBrakeCurve.Evaluate(handle) : handle;
-                    if (t <= 0.001f)
-                        valve.Position = DriverValvePosition.Running;
-                    else
-                    {
-                        valve.Position = DriverValvePosition.Service;
-                        valve.ServiceReduction = Mathf.Clamp01(t) * valve.Spec.FullService;
-                    }
-                }
-                else
-                {
-                    // The game's manual-lap zones: running, lap, apply, emergency.
-                    valve.Position = handle > 0.9f ? DriverValvePosition.Emergency
-                        : handle > 0.5f ? DriverValvePosition.Apply
-                        : handle > 0.1f ? DriverValvePosition.Lap
-                        : DriverValvePosition.Running;
-                }
-            }
-            var independent = bs.independentBrakePosition;
-            // The S-6's handle stands in positions, read from its own travel; a self-lapping one's through the game's curve.
-            engine.Independent = !bs.hasIndependentBrake ? 0
-                : engine.Spec.ManualLapIndependent || bs.indBrakeCurve == null ? independent
-                : bs.indBrakeCurve.Evaluate(independent);
-
-            // The pump's own rate times the game's Main Reservoir Fill Time, as the stock compressor runs.
-            var rate = bs.compressorProductionRate * pumpSpeedUp;
-            engine.CompressorFlow = compressing ? rate * Air.Bar * 1e-3 / Air.RT : 0;
-            return changed;
-        }
-
-
         /// <summary>Notes a value set from outside (a stock setter), which wakes the car's line.</summary>
         public void Touch() => touched = true;
 
@@ -434,69 +277,6 @@ namespace RealisticBrakes.Sim
         {
             PipeFlow = 0;
             ExhaustFlow = 0;
-        }
-
-        /// <summary>Writes the model's pressures into the stock fields after the line ran.</summary>
-        public void AfterStep()
-        {
-            var bs = System;
-            var valve = Brake.Valve;
-            var engine = Brake.Locomotive;
-            var pipeIn = 0.0;
-            var exhaust = 0.0;
-            if (valve != null)
-            {
-                bs.auxReservoirPressure = Bar(Stock(valve.AuxiliaryReservoir.Pressure));
-                // An American valve has no control reservoir; its auxiliary stands in, so the stock brake, if it takes over, sees
-                // no reduction.
-                bs.controlReservoirPressure = Bar(Stock(Brake.Distributor?.ControlReservoir.Pressure ?? valve.AuxiliaryReservoir.Pressure));
-                bs.brakeCylinderPressureUnsmoothed = Bar(valve.Cylinder.Pressure);
-                // As the stock brake counts it: the reservoirs' charging and the cylinder's filling.
-                pipeIn += valve.ChargeFlow + valve.FillFlow;
-                exhaust += valve.ExhaustFlow;
-            }
-            if (engine != null)
-            {
-                if (Air.ToAbsoluteBar(engine.MainReservoir.Pressure) > MainReservoirCeiling)
-                    engine.MainReservoir.Pressure = Air.FromAbsoluteBar(MainReservoirCeiling);
-                bs.auxReservoirPressure = Bar(engine.Distributor.AuxiliaryReservoir.Pressure);
-                bs.controlReservoirPressure = Bar(engine.Distributor.ControlReservoir.Pressure);
-                bs.brakeCylinderPressureUnsmoothed = Bar(engine.Cylinder.Pressure);
-                exhaust += engine.ExhaustFlow;
-                pipeIn += engine.FillFlow;
-                if (engine.DriverValve != null)
-                {
-                    pipeIn += engine.DriverValve.FeedFlow;
-                    exhaust += engine.DriverValve.ExhaustFlow;
-                }
-
-                var mr = WriteMainReservoir(engine.MainReservoir);
-                // The E-T's duplex governor, set by the handle; otherwise the game's.
-                var setting = engine.GovernorSetting(Brake.PipeSection);
-                var on = double.IsNaN(setting) ? bs.compressorActivationPressure : Bar(Air.Atmosphere + setting - engine.Spec.GovernorDifferential);
-                var off = double.IsNaN(setting) ? MainReservoirCeiling : Mathf.Min(MainReservoirCeiling, Bar(Air.Atmosphere + setting));
-                if (!bs.compressorActivationSignal && mr < on)
-                    bs.ToggleCompressorActivationSignal();
-                else if (bs.compressorActivationSignal && mr >= off)
-                    bs.ToggleCompressorActivationSignal();
-            }
-            // Another mod venting the pipe at this engine (BrakeSets.VentFromOutside) blows as the brake valve's exhaust does.
-            exhaust += Brake.OutsideVentFlow;
-            PipeFlow = (float)pipeIn * StockFlowPerKgPerSecond;
-            ExhaustFlow = (float)exhaust * StockFlowPerKgPerSecond;
-        }
-
-        /// <summary>Writes the model's main reservoir to the stock field, telling its readers when it moved; returns it, bar absolute.</summary>
-        private float WriteMainReservoir(Chamber reservoir)
-        {
-            var bs = System;
-            ref var mr = ref MainReservoirUnsmoothed(bs);
-            var before = mr;
-            mr = Bar(reservoir.Pressure);
-            writtenMainReservoir = mr;
-            if (Mathf.Abs(bs.mainReservoirPressure - mr) > 0.0001f || before != mr)
-                bs.Fire_MainReservoirPressureChanged();
-            return mr;
         }
 
         internal static float Bar(double pascals) => (float)Air.ToAbsoluteBar(pascals);

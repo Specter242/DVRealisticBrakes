@@ -65,15 +65,38 @@ namespace RealisticBrakes.Controls
         /// <summary>How long, in s, the handle has been held past release; 0 when it isn't.</summary>
         public float HeldPastRelease => Notch == 0 && !float.IsNaN(heldPastReleaseSince) ? Time.time - heldPastReleaseSince : 0f;
 
-        // In a hand, or kept there by a scroll or the brake keys, whose spring the game holds off until 0.3 s after the last notch.
+        // In a hand, or kept there by a scroll or the brake keys, whose spring the game holds off until 0.3 s after the last
+        // notch; or driven by a controller's axis.
         private bool Held
         {
             get
             {
                 if (stepped == null)
                     stepped = GetComponent<SteppedJoint>();
-                return control.IsGrabbed() || (stepped != null && !stepped.isSpringActive);
+                return control.IsGrabbed() || (stepped != null && !stepped.isSpringActive) || Axis;
             }
+        }
+
+        // Whether a controller's axis drives the handle: the game writes it every frame (with this source), until a hand
+        // takes the handle.
+        private bool Axis => control != null && control.LastSetValueSource == ControlImplBase.SetValueSource.Analog;
+
+        // The stock notch a controller's axis holds the handle at; -1 before the axis takes it.
+        private int axisNotch = -1;
+
+        /// <summary>
+        /// Where a controller's axis at <paramref name="value"/>, on the stock scale, puts the handle: on a stock notch, moved
+        /// only past the deadband (<see cref="AxisNotches"/>). The added notches stay out of its reach, as for any value
+        /// set on the handle.
+        /// </summary>
+        public float FromAxis(float value)
+        {
+            if (Layout == null || control == null)
+                return value;
+            if (!Axis)
+                axisNotch = -1;
+            axisNotch = AxisNotches.Snap(value, Layout.StockNotches, axisNotch);
+            return AxisNotches.Value(axisNotch, Layout.StockNotches);
         }
 
         /// <summary>The player a zone set here is from: this game's own hand.</summary>
@@ -294,7 +317,9 @@ namespace RealisticBrakes.Controls
             var notch = Mathf.RoundToInt(fromMinimum);
             var notches = Layout.Notches;
             Notch = Mathf.Clamp(invert ? notches - 1 - notch : notch, 0, notches - 1);
-            requestValueUpdate(control, Layout.StockValue(Notch));
+            // Under an axis the value is the axis's, put on its notch (FromAxis): the notches the lever passes write none.
+            if (!Axis)
+                requestValueUpdate(control, Layout.StockValue(Notch));
             // A hand on this handle takes the engine's zone over from whoever set it last (a value set from outside never moves it into the added notches).
             if (Held)
                 Write(Layout.Zone(Notch, HeldPastRelease));

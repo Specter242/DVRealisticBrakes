@@ -15,7 +15,7 @@ namespace RealisticBrakes.Controls
         public static void Attach(TrainCar car, InteriorControlsManager cab)
         {
             foreach (var control in CabHandles.Of(car, cab, InteriorControlsManager.ControlType.TrainBrake))
-                Add(control, car, (air, engine) => CabValveText.TrainBrake(engine, air.System.selfLappingController));
+                Add(control, car, (air, engine) => CabValveText.TrainBrake(engine, air.System.selfLappingController, AnotherValveCutIn(air)));
             // The S-6 handle is fitted after this, so it's looked for as the text is drawn.
             foreach (var control in CabHandles.Of(car, cab, InteriorControlsManager.ControlType.IndBrake))
             {
@@ -25,6 +25,18 @@ namespace RealisticBrakes.Controls
             }
             foreach (var control in CabHandles.Of(car, cab, InteriorControlsManager.ControlType.TrainBrakeCutout))
                 Add(control, car, (air, engine) => CabValveText.Cutout(engine.DriverValve));
+        }
+
+        private static bool AnotherValveCutIn(CarAir air)
+        {
+            var set = air.System?.brakeset;
+            var line = set != null && BrakeSets.TryGetLine(set, out var current) ? current : air.Line;
+            if (line == null)
+                return false;
+            foreach (var other in line.Cars)
+                if (!ReferenceEquals(other, air.Brake) && other.Locomotive?.DriverValve?.CutIn == true)
+                    return true;
+            return false;
         }
 
         private static bool HasReleaseNotch(ControlImplBase lever)

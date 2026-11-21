@@ -26,9 +26,21 @@ namespace RealisticBrakes.Sim
         // Each cut with a fresh car, and when its newest fresh car appeared.
         private readonly Dictionary<Trainset, float> newest = new Dictionary<Trainset, float>();
         private readonly List<HeldCar> held = new List<HeldCar>();
-        // The cars held last frame and this one; the two sets change places each frame.
-        private HashSet<TrainCar> scaled = new HashSet<TrainCar>();
-        private HashSet<TrainCar> scaledNow = new HashSet<TrainCar>();
+        private readonly struct ScaledCar
+        {
+            public readonly TrainCar Car;
+            public readonly CarAir Air;
+
+            public ScaledCar(TrainCar car, CarAir air)
+            {
+                Car = car;
+                Air = air;
+            }
+        }
+
+        // The cars currently held: each held car's CarAir.HoldStamp equals holdStamp for this frame, and 0 once removed.
+        private readonly List<ScaledCar> scaled = new List<ScaledCar>();
+        private int holdStamp;
 
         // Each standing cut's last weighing (Holding.Weighed). A coupling or uncoupling makes new cuts, weighed afresh.
         private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Trainset, Holding.Weighed> weighings =
@@ -55,7 +67,8 @@ namespace RealisticBrakes.Sim
         private void LateUpdate()
         {
             Watch();
-            scaledNow.Clear();
+            if (++holdStamp == 0)
+                holdStamp = 1;
             if (Main.Active)
             {
                 SecureFresh();
@@ -66,12 +79,24 @@ namespace RealisticBrakes.Sim
             }
             // A car no longer held gets back its force per kg and its factor at once: the rigging's or the game's (a review,
             // 2026-10-27: with the brake force from the load, the rigging stops rewriting it, and the scaled force stayed).
-            foreach (var car in scaled)
-                if (!scaledNow.Contains(car) && car != null)
+            var kept = 0;
+            for (var i = 0; i < scaled.Count; i++)
+            {
+                var entry = scaled[i];
+                if (entry.Air.HoldStamp == holdStamp)
+                {
+                    if (kept != i)
+                        scaled[kept] = entry;
+                    kept++;
+                    continue;
+                }
+                entry.Air.HoldStamp = 0;
+                var car = entry.Car;
+                if (car != null && !(car.brakeSystem != null && BrakeSets.TryGet(car.brakeSystem, out var current) && current.HoldStamp == holdStamp))
                     Restore(car);
-            var last = scaled;
-            scaled = scaledNow;
-            scaledNow = last;
+            }
+            if (kept < scaled.Count)
+                scaled.RemoveRange(kept, scaled.Count - kept);
         }
 
         // Follows the game's spawner, which isn't there until a game loads (it isn't made on demand: no AllowAutoCreate).
@@ -149,7 +174,8 @@ namespace RealisticBrakes.Sim
         private void Hold(Trainset set, float fastest)
         {
             var unweighed = Fresh(set);
-            var holds = unweighed || Holds(set);
+            var holdsKnown = unweighed;
+            var holds = unweighed;
             var frozen = false;
             foreach (var car in set.cars)
             {
@@ -160,6 +186,11 @@ namespace RealisticBrakes.Sim
                 var target = brakes.unaffectedTargetBrakingFactor * brakes.heatController.overheatReductionFactor;
                 if (target < Braked && !unweighed)
                     continue;
+                if (!holdsKnown)
+                {
+                    holds = Holds(set);
+                    holdsKnown = true;
+                }
                 var factor = holds ? Mathf.Max(target, Frozen) : Mathf.Min(target, Free);
                 // The same force at the new factor; none for an unbraked car frozen. Not where another mod keeps the force.
                 if (!ForceKeptByOtherMod(car))
@@ -168,17 +199,23 @@ namespace RealisticBrakes.Sim
                     foreach (var bogie in car.Bogies)
                         if (bogie != null)
                             bogie.maxBrakingForcePerKg = basePerKg * Mathf.Max(0f, target) / factor;
+                    air.MarkRiggingDirty();
                 }
                 SetFactor(brakes, factor);
-                scaledNow.Add(car);
+                if (air.HoldStamp == 0)
+                    scaled.Add(new ScaledCar(car, air));
+                air.HoldStamp = holdStamp;
                 frozen |= holds;
             }
+            if (!holdsKnown)
+                weighings.Remove(set);
             if (frozen && !Net.IsGuest && fastest > SlowestCreep)
                 StopCreep(set);
         }
 
         // Whether the cut's brakes hold it, from its last weighing while that stands (Holding.Weighed): weighed again when
-        // a car's braking or mass has changed, and twice a second regardless.
+        // a car's braking or mass has changed, and twice a second regardless. Logs once when a standing cut transitions
+        // from holding (or newly weighed) to not holding, so rolling cuts leave a concise diagnostic record.
         private bool Holds(Trainset set)
         {
             if (!weighings.TryGetValue(set, out var weighed))
@@ -190,8 +227,32 @@ namespace RealisticBrakes.Sim
             }
             var inputs = Inputs(set);
             if (weighed.Due(inputs, Time.time))
-                weighed.Record(inputs, Time.time, Weigh(set));
+            {
+                var weight = Weigh(set);
+                if (weighed.Record(inputs, Time.time, weight, loggable: !HasEngineOrPlayer(set)))
+                    Main.Mod?.Logger.Log(string.Format(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        "Standing cut {0} ({1} {2}, {3:F0} t on {4:F2}% grade) cannot hold: {5:F1} kN holding vs {6:F1} kN gravity pull",
+                        set.firstCar?.ID ?? "?",
+                        set.cars.Count,
+                        set.cars.Count == 1 ? "car" : "cars",
+                        weight.Mass / 1000.0,
+                        weight.GradePercent,
+                        weight.HoldingForce / 1000.0,
+                        weight.Pull / 1000.0));
+            }
             return weighed.Holds;
+        }
+
+        // Driven or locomotive sets (and any set the player is riding) are skipped for the standing-cut roll log so normal
+        // hill starts don't spam the log.
+        private static bool HasEngineOrPlayer(Trainset set)
+        {
+            var playerCar = PlayerManager.Car;
+            foreach (var car in set.cars)
+                if (car != null && (car.IsLoco || car == playerCar))
+                    return true;
+            return false;
         }
 
         // What a weighing changes with from frame to frame, summed up: each car's braking, to a thousandth of full, and
@@ -291,14 +352,16 @@ namespace RealisticBrakes.Sim
             return false;
         }
 
-        // Whether the cut's brakes hold it: each car's force as the game will give it, its grade along the cut.
-        private bool Weigh(Trainset set)
+        // Weighs the cut's brakes against gravity along its grade: each car's force as the game will give it.
+        private Holding.CutWeight Weigh(Trainset set)
         {
             held.Clear();
             var cars = set.cars;
             for (var i = 0; i < cars.Count; i++)
             {
                 var car = cars[i];
+                if (car == null)
+                    continue;
                 var brakes = car.brakeSystem;
                 var mass = car.massController != null ? car.massController.TotalMass : 0f;
                 var force = 0f;
@@ -315,7 +378,7 @@ namespace RealisticBrakes.Sim
                 var rolling = car.carLivery != null && car.carLivery.parentType != null ? car.carLivery.parentType.RollingResistanceCoef : 0.002f;
                 held.Add(new HeldCar(mass, force, forward.y * sense, rolling));
             }
-            return Holding.Holds(held);
+            return Holding.Weigh(held);
         }
 
         // Whether car i faces along the cut, from its first car to its last, by its couplings rather than its heading (a review,
@@ -354,12 +417,18 @@ namespace RealisticBrakes.Sim
         private static void Restore(TrainCar car)
         {
             // With the model off, the game's force: the rigging's isn't kept up then.
-            var perKg = Main.Active ? BasePerKg(car) : StockPerKg(car);
+            var brakes = car.brakeSystem;
+            CarAir air = null;
+            var hasAir = brakes != null && BrakeSets.TryGet(brakes, out air);
+            var perKg = Main.Active && hasAir && air.Rigging != null ? air.RiggedPerKg : StockPerKg(car);
             if (!ForceKeptByOtherMod(car))
+            {
                 foreach (var bogie in car.Bogies)
                     if (bogie != null)
                         bogie.maxBrakingForcePerKg = perKg;
-            var brakes = car.brakeSystem;
+                if (hasAir)
+                    air.MarkRiggingDirty();
+            }
             if (brakes != null)
                 SetFactor(brakes, brakes.unaffectedTargetBrakingFactor * brakes.heatController.overheatReductionFactor);
         }
@@ -405,7 +474,7 @@ namespace RealisticBrakes.Sim
                     continue;
                 }
                 // Weighed last: it works out every car's force.
-                if (!FreshCut.Secures(standing, driven, Weigh(set)))
+                if (!FreshCut.Secures(standing, driven, Weigh(set).Holds))
                     continue;
                 var set_ = 0;
                 foreach (var car in set.cars)

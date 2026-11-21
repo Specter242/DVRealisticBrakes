@@ -73,7 +73,7 @@ public class BrakeReadingTests
     [InlineData("Pipe")]
     [InlineData("3")]
     [InlineData("AuxiliaryReservoir,ControlReservoir")]
-    public void AnUnknownNameIsNoPart(string name) => Assert.False(BrakeParts.TryParse(name, out _));
+    public void AnUnknownNameIsNoPart(string? name) => Assert.False(BrakeParts.TryParse(name, out _));
 }
 
 /// <summary>
@@ -125,5 +125,14 @@ public class BrakeSettingReadingTests
         Assert.Null(bare.BrakingMode);
         Assert.Null(bare.CutOut);
         Assert.Null(bare.BrakeValveCutOut);
+    }
+
+    [Fact]
+    public void OnlyEnginesWithBailCapableBrakesCanBail()
+    {
+        var rig = new Rig(2);
+        Assert.True(rig.Cars[0].CanBail);
+        Assert.False(rig.Front.CanBail);
+        Assert.False(new CarBrake(15, Rig.Geometry).CanBail);
     }
 }

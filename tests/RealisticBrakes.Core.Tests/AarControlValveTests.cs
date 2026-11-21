@@ -202,6 +202,233 @@ public class AarControlValveTests
         Assert.False(valve.CylinderReleaseOpen);
         Assert.Equal(0, valve.Cylinder.GaugeBar, 2);
     }
+
+    [Fact]
+    public void RestoreSetsReleasedAndAppliedStatesWithoutTrippingEmergency()
+    {
+        var released = new AarControlValve();
+        released.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(5.0), 0, Air.FromGaugeBar(5.0));
+        Assert.False(released.Applied);
+        Assert.False(released.Emergency);
+        Assert.False(released.CylinderReleaseOpen);
+        Assert.Equal(Air.Atmosphere, released.Cylinder.Pressure, 6);
+        Assert.Equal(Air.FromGaugeBar(5.0), released.QuickActionChamber.Pressure, 6);
+
+        // Applied with a low pipe: QuickActionChamber starts synced to the pipe so stepping does not trip emergency.
+        var applied = new AarControlValve();
+        var pipe = new Chamber(1000, Air.FromGaugeBar(3.5));
+        applied.Restore(Air.FromGaugeBar(3.6), Air.FromGaugeBar(5.0), Air.FromGaugeBar(3.5), pipe.Pressure);
+        Assert.True(applied.Applied);
+        Assert.False(applied.Emergency);
+        Assert.Equal(pipe.Pressure, applied.QuickActionChamber.Pressure, 6);
+        Hold(applied, pipe, 3.5, 5);
+        Assert.True(applied.Applied);
+        Assert.False(applied.Emergency);
+        Assert.InRange(applied.Cylinder.GaugeBar, 3.4, 3.7);
+    }
+
+    [Fact]
+    public void RestoreLatchPreservesEmergencyAndClearsItWhenReleased()
+    {
+        var valve = new AarControlValve();
+        var pipe = new Chamber(1000, Air.Atmosphere);
+        valve.Restore(Air.FromGaugeBar(4.2), Air.FromGaugeBar(4.2), Air.FromGaugeBar(4.2), pipe.Pressure);
+        valve.RestoreLatch(applied: true, emergency: true);
+        Assert.True(valve.Applied);
+        Assert.True(valve.Emergency);
+
+        Hold(valve, pipe, 0, 5);
+        Assert.True(valve.Emergency);
+        Assert.InRange(valve.Cylinder.GaugeBar, 4.1, 4.4);
+
+        // Restoring released must clear emergency too.
+        valve.RestoreLatch(applied: false, emergency: true);
+        Assert.False(valve.Applied);
+        Assert.False(valve.Emergency);
+    }
+
+    [Fact]
+    public void RestoreCylinderReleaseVentsAppliedCarAndIgnoresReleasedCar()
+    {
+        var released = new AarControlValve();
+        released.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(5.0), Air.Atmosphere, Air.FromGaugeBar(5.0));
+        released.RestoreCylinderRelease(true);
+        Assert.False(released.CylinderReleaseOpen);
+
+        var applied = new AarControlValve();
+        var pipe = new Chamber(1000, Air.FromGaugeBar(3.5));
+        applied.Restore(Air.FromGaugeBar(3.6), Air.FromGaugeBar(5.0), Air.FromGaugeBar(3.5), pipe.Pressure);
+        applied.RestoreCylinderRelease(true);
+        Assert.True(applied.CylinderReleaseOpen);
+
+        Hold(applied, pipe, 3.5, 30);
+        Assert.Equal(0, applied.Cylinder.GaugeBar, 2);
+        Assert.True(applied.Applied);
+        Assert.True(applied.CylinderReleaseOpen);
+
+        // Recharged, the release resets and the valve releases.
+        Hold(applied, pipe, 5.0, 120);
+        Assert.False(applied.Applied);
+        Assert.False(applied.CylinderReleaseOpen);
+    }
+
+    [Fact]
+    public void ACarBledSoonAfterApplyingStillRecoversOnRecharge()
+    {
+        var (valve, pipe) = Charged();
+        // Reduce until the valve applies, then wait 0.3 s (under the ~0.8 s needed to draw the auxiliary down by ReleaseThreshold).
+        var p = pipe.GaugeBar;
+        for (var t = 0.0; !valve.Applied && t < 5; t += Dt)
+        {
+            p = Math.Max(4.3, p - 0.3 * Dt);
+            pipe.Pressure = Air.FromGaugeBar(p);
+            valve.Step(pipe, Dt);
+        }
+        Assert.True(valve.Applied);
+        for (var t = 0.0; t < 0.3; t += Dt)
+        {
+            p = Math.Max(4.3, p - 0.3 * Dt);
+            pipe.Pressure = Air.FromGaugeBar(p);
+            valve.Step(pipe, Dt);
+        }
+        Assert.True(valve.AuxiliaryReservoir.GaugeBar > 4.9);
+
+        valve.PullRelease();
+        Reduce(valve, pipe, 4.3, 30);
+        Assert.Equal(0, valve.Cylinder.GaugeBar, 2);
+        // Further reduction while still bled does not apply.
+        Reduce(valve, pipe, 3.6, 30);
+        Assert.Equal(0, valve.Cylinder.GaugeBar, 2);
+
+        // Recharged (even slightly under 5 bar, as at the rear of a train), the valve releases and resets cleanly.
+        Hold(valve, pipe, 4.95, 120);
+        Assert.False(valve.Applied);
+        Assert.False(valve.CylinderReleaseOpen);
+
+        // The next application works normally.
+        Reduce(valve, pipe, 4.3, 30);
+        Assert.True(valve.Applied);
+        Assert.True(valve.Cylinder.GaugeBar > 1);
+    }
+
+    [Fact]
+    public void ACarBledSoonAfterApplyingAndRestoredFromSaveStillRecoversOnRecharge()
+    {
+        var (valve, pipe) = Charged();
+        var p = pipe.GaugeBar;
+        for (var t = 0.0; !valve.Applied && t < 5; t += Dt)
+        {
+            p = Math.Max(4.3, p - 0.3 * Dt);
+            pipe.Pressure = Air.FromGaugeBar(p);
+            valve.Step(pipe, Dt);
+        }
+        for (var t = 0.0; t < 0.3; t += Dt)
+        {
+            p = Math.Max(4.3, p - 0.3 * Dt);
+            pipe.Pressure = Air.FromGaugeBar(p);
+            valve.Step(pipe, Dt);
+        }
+        valve.PullRelease();
+        Reduce(valve, pipe, 4.3, 10);
+
+        // Simulate save/load where appliedFrom is not persisted.
+        valve.RestoreLatch(true, false);
+        valve.RestoreCylinderRelease(true);
+        Hold(valve, pipe, 4.3, 5);
+        Assert.True(valve.CylinderReleaseOpen);
+
+        Hold(valve, pipe, 5, 120);
+        Assert.False(valve.Applied);
+        Assert.False(valve.CylinderReleaseOpen);
+
+        Reduce(valve, pipe, 4.3, 30);
+        Assert.True(valve.Cylinder.GaugeBar > 1);
+    }
+
+    [Fact]
+    public void ACarBledImmediatelyAfterEmergencyStillRecoversOnRecharge()
+    {
+        var (valve, pipe) = Charged();
+        Hold(valve, pipe, 0, 0.1);
+        Assert.True(valve.Emergency);
+        Assert.True(valve.AuxiliaryReservoir.GaugeBar > 4.9);
+
+        valve.PullRelease();
+        Hold(valve, pipe, 0, 60);
+        Assert.Equal(0, valve.Cylinder.GaugeBar, 2);
+
+        Hold(valve, pipe, 5, 180);
+        Assert.False(valve.Applied);
+        Assert.False(valve.Emergency);
+        Assert.False(valve.CylinderReleaseOpen);
+
+        Reduce(valve, pipe, 4.3, 30);
+        Assert.True(valve.Cylinder.GaugeBar > 1);
+    }
+
+    [Fact]
+    public void EmergencyOnARechargingCarDoesNotCancelImmediately()
+    {
+        var valve = new AarControlValve();
+        valve.ChargeTo(Air.FromGaugeBar(5));
+        // Recharging car: auxiliary reservoir lags at 4.5 bar while quick-action chamber stands at 5.0 bar.
+        // Dropping the pipe to 4.5 bar trips emergency and must not be cancelled on the same step by restored.
+        valve.AuxiliaryReservoir.Pressure = Air.FromGaugeBar(4.5);
+        valve.QuickActionChamber.Pressure = Air.FromGaugeBar(5.0);
+        var pipe = new Chamber(0.015, Air.FromGaugeBar(4.5));
+        valve.Step(pipe, Dt);
+        Assert.True(valve.Emergency);
+        Assert.True(valve.Applied);
+        Assert.True(valve.FillFlow > 0);
+        Assert.True(valve.Cylinder.GaugeBar > 0);
+        for (var t = 0.0; t < 5; t += Dt)
+            valve.Step(pipe, Dt);
+        Assert.True(valve.Emergency);
+        Assert.True(valve.Cylinder.GaugeBar > 3.5);
+    }
+
+    [Fact]
+    public void ACarBledSoonAfterApplyingAndRestoredMidRechargeStillRecovers()
+    {
+        var (valve, pipe) = Charged();
+        var p = pipe.GaugeBar;
+        for (var t = 0.0; !valve.Applied && t < 5; t += Dt)
+        {
+            p = Math.Max(4.3, p - 0.3 * Dt);
+            pipe.Pressure = Air.FromGaugeBar(p);
+            valve.Step(pipe, Dt);
+        }
+        for (var t = 0.0; t < 0.3; t += Dt)
+        {
+            p = Math.Max(4.3, p - 0.3 * Dt);
+            pipe.Pressure = Air.FromGaugeBar(p);
+            valve.Step(pipe, Dt);
+        }
+        valve.PullRelease();
+        Reduce(valve, pipe, 4.3, 10);
+        var savedBledMin = valve.BledPipeMin;
+        Assert.Equal(4.3, Air.ToGaugeBar(savedBledMin), 2);
+
+        // Save and restore partway through recharge at 4.937 bar (under 0.1 bar below full 5.0 bar).
+        var aux = valve.AuxiliaryReservoir.Pressure;
+        var emer = valve.EmergencyReservoir.Pressure;
+        var cyl = valve.Cylinder.Pressure;
+        var loaded = new AarControlValve();
+        loaded.Restore(aux, emer, cyl, Air.FromGaugeBar(4.937));
+        loaded.RestoreLatch(true, false);
+        loaded.RestoreCylinderRelease(true, savedBledMin);
+        var loadedPipe = new Chamber(1000, Air.FromGaugeBar(4.937));
+        Hold(loaded, loadedPipe, 4.937, 1);
+
+        // Finishing recharge to 5.0 bar resets the release valve so the next application brakes normally.
+        Hold(loaded, loadedPipe, 5, 120);
+        Assert.False(loaded.Applied);
+        Assert.False(loaded.CylinderReleaseOpen);
+
+        Reduce(loaded, loadedPipe, 4.3, 30);
+        Assert.True(loaded.Applied);
+        Assert.True(loaded.Cylinder.GaugeBar > 1);
+    }
 }
 
 /// <summary>Trains of American cars.</summary>
@@ -287,8 +514,8 @@ public class AarTrainTests
         var rig = new Rig(50, american: true);
         rig.Valve.Position = DriverValvePosition.Emergency;
         var t = rig.RunUntil(() => rig.Rear.ControlValve!.Applied, 30);
-        // Each car's vent valve carries it on: WABCO gives about 900 ft/s (275 m/s).
-        Assert.InRange(rig.Length / t, 240, 310);
+        // Each car's vent valve carries it on: WABCO gives about 900 ft/s (275 m/s; ~252 m/s here).
+        Assert.InRange(rig.Length / t, 240, 285);
         rig.Run(5);
         Assert.All(rig.Cars.Skip(1), c => Assert.True(c.ControlValve!.Emergency));
     }
@@ -365,8 +592,9 @@ public class AarTrainTests
         var released = rig.RunUntil(() => rig.Rear.CylinderGauge < 0.4 * Air.Bar, 300);
         var recharged = rig.RunUntil(() => rig.Cars.Skip(1).All(c =>
             c.ControlValve!.AuxiliaryReservoir.GaugeBar > 4.9 && c.ControlValve.EmergencyReservoir.GaugeBar > 4.9), 900);
-        Assert.InRange(released, 5, 60);
-        Assert.InRange(recharged, 120, 600);
+        // Rear releases in ~28 s (direct release with retarded head-end) and reservoirs recharge in ~136 s more (~164 s total).
+        Assert.InRange(released, 20, 36);
+        Assert.InRange(recharged, 115, 165);
     }
 }
 

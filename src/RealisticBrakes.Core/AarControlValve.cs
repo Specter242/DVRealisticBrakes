@@ -308,6 +308,9 @@ namespace RealisticBrakes.Core
         // Where the auxiliary reservoir stood when the brake applied, Pa; unknown (never reached) for one restored applied.
         private double appliedFrom = double.PositiveInfinity;
 
+        // Lowest pipe pressure seen while the brake cylinder release valve stands open, Pa; +Inf when closed.
+        private double bledPipeMin = double.PositiveInfinity;
+
         public void ChargeTo(double pressure)
         {
             AuxiliaryReservoir.Pressure = pressure;
@@ -316,7 +319,10 @@ namespace RealisticBrakes.Core
             Cylinder.Pressure = Air.Atmosphere;
             Applied = false;
             Emergency = false;
+            appliedFrom = double.PositiveInfinity;
+            bledPipeMin = double.PositiveInfinity;
             quickServiceDone = false;
+            CylinderReleaseOpen = false;
         }
 
         /// <summary>
@@ -331,6 +337,7 @@ namespace RealisticBrakes.Core
             QuickActionChamber.Pressure = pipe;
             Applied = cylinder > Air.FromGaugeBar(0.1);
             appliedFrom = double.PositiveInfinity;
+            bledPipeMin = double.PositiveInfinity;
             Emergency = false;
             quickServiceDone = Applied;
             CylinderReleaseOpen = false;
@@ -340,6 +347,7 @@ namespace RealisticBrakes.Core
         public void RestoreLatch(bool applied, bool emergency)
         {
             appliedFrom = double.PositiveInfinity;
+            bledPipeMin = double.PositiveInfinity;
             Applied = applied;
             Emergency = applied && emergency;
             quickServiceDone = applied;
@@ -372,8 +380,17 @@ namespace RealisticBrakes.Core
         /// <inheritdoc/>
         public double IndependentCylinder { get; set; }
 
-        /// <summary>Restores the brake cylinder release valve's latch, as saved.</summary>
-        public void RestoreCylinderRelease(bool open) => CylinderReleaseOpen = open && Applied;
+        /// <summary>Lowest pipe pressure seen while <see cref="CylinderReleaseOpen"/> stands open, Pa absolute; <see cref="double.PositiveInfinity"/> when closed.</summary>
+        public double BledPipeMin => bledPipeMin;
+
+        /// <summary>Restores the brake cylinder release valve's latch, as saved, with its lowest pipe pressure if recorded.</summary>
+        public void RestoreCylinderRelease(bool open, double pipeMin = double.PositiveInfinity)
+        {
+            CylinderReleaseOpen = open && Applied;
+            bledPipeMin = CylinderReleaseOpen && !double.IsNaN(pipeMin) && !double.IsInfinity(pipeMin) && pipeMin >= 0
+                ? pipeMin
+                : double.PositiveInfinity;
+        }
 
         // Whether the valve was cut out at its last step.
         private bool cutOut;
@@ -389,6 +406,8 @@ namespace RealisticBrakes.Core
             {
                 Applied = false;
                 Emergency = false;
+                appliedFrom = double.PositiveInfinity;
+                bledPipeMin = double.PositiveInfinity;
                 CylinderReleaseOpen = false;
                 cutOut = true;
                 exhausted += spec.ReleasePort.Vent(Cylinder, dt);
@@ -420,10 +439,19 @@ namespace RealisticBrakes.Core
                 Applied = true;
             }
 
+            if (CylinderReleaseOpen)
+                bledPipeMin = Math.Min(bledPipeMin, pipe.Pressure);
+            else
+                bledPipeMin = double.PositiveInfinity;
+
             var lead = AuxiliaryReservoir.Pressure - pipe.Pressure;
-            if (Applied && !Emergency && (-lead > spec.ReleaseThreshold || pipe.Pressure >= appliedFrom - spec.RestoredBand))
-                Release();
-            else if (Emergency && pipe.Pressure - AuxiliaryReservoir.Pressure > spec.ReleaseThreshold)
+            var restored = pipe.Pressure >= appliedFrom - spec.RestoredBand;
+            // A car bled early keeps its auxiliary reservoir near the pre-application pressure; once the pipe rises
+            // past the release margin from its low point and returns to the reservoir, the release valve resets.
+            var bledRecharged = CylinderReleaseOpen
+                && pipe.Pressure - bledPipeMin > spec.ReleaseThreshold
+                && lead <= spec.RestoredBand;
+            if (Applied && (-lead > spec.ReleaseThreshold || (restored && !Emergency) || bledRecharged))
                 Release();
             else if (!Applied && lead > spec.ApplyThreshold)
             {
@@ -514,6 +542,8 @@ namespace RealisticBrakes.Core
         {
             Applied = false;
             Emergency = false;
+            appliedFrom = double.PositiveInfinity;
+            bledPipeMin = double.PositiveInfinity;
         }
 
         /// <summary>Whether the valve stands in retarded release, its exhaust restricted.</summary>

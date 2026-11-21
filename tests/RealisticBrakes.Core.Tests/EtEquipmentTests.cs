@@ -446,6 +446,104 @@ public class EtEquipmentTests
         // "The venting of brake pipe air is not included" (Wood p. 56).
         Assert.False(LocomotiveBrakeSpec.EtSteam().Distributor.QuickService.IsOpen);
     }
+
+    /// <summary>Drives the H-6 as the adapter does: Apply until the equalizing reservoir falls by <paramref name="reductionBar"/>, then Lap.</summary>
+    private static double ApplyAndLap(Rig rig, double reductionBar)
+    {
+        var target = rig.Valve.EqualizingReservoir.GaugeBar - reductionBar;
+        rig.Valve.Position = DriverValvePosition.Apply;
+        var elapsed = rig.RunUntil(() => rig.Valve.EqualizingReservoir.GaugeBar <= target, 30);
+        rig.Valve.Position = DriverValvePosition.Lap;
+        return elapsed;
+    }
+
+    [Fact]
+    public void TheH6InApplyReducesAtItsPeriodRateAndHoldsInLap()
+    {
+        var rig = Train();
+        var fiveLb = ApplyAndLap(rig, 5 / 14.5038);
+        Assert.InRange(fiveLb, 1.5, 2.5);
+        var heldEr = rig.Valve.EqualizingReservoir.GaugeBar;
+        rig.Run(10);
+        Assert.Equal(heldEr, rig.Valve.EqualizingReservoir.GaugeBar, 6);
+
+        // Continue down to a full 1.5 bar reduction using Apply -> Lap.
+        var rest = ApplyAndLap(rig, 1.5 - 5 / 14.5038);
+        Assert.InRange(fiveLb + rest, 7.5, 10.5);
+        rig.Run(25);
+        Assert.All(rig.Cars.Skip(1), c =>
+        {
+            Assert.True(c.ControlValve!.Applied);
+            Assert.False(c.ControlValve.Emergency);
+            Assert.InRange(c.CylinderGauge / Air.Bar, 3.4, 3.8);
+        });
+        Assert.InRange(EngineBar(rig), 3.4, 3.85);
+    }
+
+    [Fact]
+    public void TheH6AdapterPositionsRunFullApplyLapFillHoldingRunningCycle()
+    {
+        // Exercises the exact positions the adapter sends to the H-6 (never DriverValvePosition.Service):
+        // Apply -> Lap -> Fill -> Holding -> Running.
+        var rig = Train();
+        var elapsed = ApplyAndLap(rig, 1.0);
+        Assert.False(double.IsNaN(elapsed));
+        rig.Run(25);
+        var applied = EngineBar(rig);
+        Assert.InRange(applied, 2.0, 3.8);
+        Assert.All(rig.Cars.Skip(1), c => Assert.True(c.ControlValve!.Applied));
+
+        // Kick release in Fill, then Holding: cars release and recharge, engine holds its automatic brake steady.
+        rig.Valve.Position = DriverValvePosition.Fill;
+        rig.Run(8);
+        rig.Valve.Position = DriverValvePosition.Holding;
+        rig.Run(60);
+        Assert.All(rig.Cars.Skip(1), c =>
+        {
+            Assert.False(c.ControlValve!.Applied);
+            Assert.InRange(c.CylinderGauge / Air.Bar, 0, 0.05);
+        });
+        Assert.InRange(EngineBar(rig), applied - 0.05, applied + 0.05);
+
+        // Running lets the engine brake go completely.
+        rig.Valve.Position = DriverValvePosition.Running;
+        Assert.InRange(rig.RunUntil(() => EngineBar(rig) < 0.1, 30), 0.5, 6);
+    }
+
+    [Fact]
+    public void TheH6AdapterPositionsReleaseEngineAndTrainInRunningAndHandleEmergency()
+    {
+        // Apply -> Lap -> Running lets both engine and train go together.
+        var direct = Train();
+        ApplyAndLap(direct, 0.8);
+        direct.Run(25);
+        Assert.True(EngineBar(direct) > 1.5);
+        direct.Valve.Position = DriverValvePosition.Running;
+        direct.Run(45);
+        Assert.True(EngineBar(direct) < 0.1);
+        Assert.All(direct.Cars.Skip(1), c => Assert.False(c.ControlValve!.Applied));
+
+        // Apply -> Lap -> Emergency -> Fill -> Holding -> Running.
+        var rig = Train();
+        ApplyAndLap(rig, 0.5);
+        rig.Run(10);
+        rig.Valve.Position = DriverValvePosition.Emergency;
+        rig.Run(15);
+        Assert.InRange(EngineBar(rig), 4.6, 4.75);
+        Assert.All(rig.Cars.Skip(1), c => Assert.True(c.ControlValve!.Emergency));
+
+        // Wait for AB emergency vent valves to close, then kick-release in Fill -> Holding -> Running.
+        rig.Run(80);
+        rig.Valve.Position = DriverValvePosition.Fill;
+        rig.Run(10);
+        rig.Valve.Position = DriverValvePosition.Holding;
+        rig.Run(60);
+        Assert.All(rig.Cars.Skip(1), c => Assert.False(c.ControlValve!.Applied));
+        Assert.InRange(EngineBar(rig), 4.6, 4.75);
+
+        rig.Valve.Position = DriverValvePosition.Running;
+        Assert.InRange(rig.RunUntil(() => EngineBar(rig) < 0.1, 30), 0.5, 8);
+    }
 }
 
 /// <summary>Period details of American cars (ICS, The Westinghouse Air-Brake Handbook, 1918).</summary>

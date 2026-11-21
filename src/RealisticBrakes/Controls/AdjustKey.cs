@@ -30,10 +30,57 @@ namespace RealisticBrakes.Controls
                 set.Remove(player);
             if (set.Count == 0)
                 holders.Remove(car);
+            if (car.brakeSystem != null && BrakeSets.TryGet(car.brakeSystem, out var air))
+                air.Touch();
+        }
+
+        /// <summary>Who holds the key on each car (including this game's own hand, as <see cref="TrainBrakeHandle.LocalHand"/>), for a joining guest.</summary>
+        public static IEnumerable<(TrainCar Car, byte Player)> Holds()
+        {
+            foreach (var pair in holders)
+                foreach (var player in pair.Value)
+                    yield return (pair.Key, player);
+        }
+
+        /// <summary>Who holds the key on <paramref name="car"/> from elsewhere.</summary>
+        public static IEnumerable<byte> HoldersOf(TrainCar car)
+        {
+            var list = new List<byte>();
+            if (car != null && holders.TryGetValue(car, out var set))
+                foreach (var holder in set)
+                    if (holder != TrainBrakeHandle.LocalHand)
+                        list.Add(holder);
+            return list;
+        }
+
+        /// <summary>
+        /// A player leaves the session (<paramref name="player"/>; every remote
+        /// player, when null): their Angleichen holds end. Returns the cars
+        /// whose hold ended, for the host to tell its guests.
+        /// </summary>
+        public static List<TrainCar> ReleaseHands(byte? player)
+        {
+            var ended = new List<TrainCar>();
+            foreach (var pair in new List<KeyValuePair<TrainCar, HashSet<byte>>>(holders))
+                foreach (var holder in new List<byte>(pair.Value))
+                    if (holder != TrainBrakeHandle.LocalHand && (player == null || holder == player))
+                    {
+                        SetHold(pair.Key, holder, false);
+                        ended.Add(pair.Key);
+                    }
+            return ended;
+        }
+
+        /// <summary>The game resets <paramref name="car"/> for reuse: any holds on it go.</summary>
+        public static void Forget(TrainCar car)
+        {
+            if (car != null)
+                holders.Remove(car);
         }
 
         private void Update()
         {
+            Net.Tick();
             var key = Main.Settings?.AdjustKey;
             var car = PlayerManager.Car;
             var down = key != null && key.keyCode != KeyCode.None && Main.Active && key.Pressed()

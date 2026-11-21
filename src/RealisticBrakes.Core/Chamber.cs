@@ -10,12 +10,22 @@ namespace RealisticBrakes.Core
     /// </summary>
     public sealed class Chamber
     {
+        private double mass;
+
         public Chamber(double volume, double pressure = Air.Atmosphere)
         {
-            if (!(volume > 0))
+            if (!(volume > 0) || double.IsInfinity(volume))
                 throw new ArgumentOutOfRangeException(nameof(volume), volume, "A chamber needs a positive volume.");
+            var target = IsFinite(pressure) ? (pressure > 0 ? pressure : 0) : Air.Atmosphere;
+            var nextMass = Air.Mass(target, volume);
+            if (!IsFinite(nextMass) || !IsFinite(Air.Pressure(nextMass, volume)))
+            {
+                nextMass = Air.Mass(Air.Atmosphere, volume);
+                if (!IsFinite(nextMass) || !IsFinite(Air.Pressure(nextMass, volume)))
+                    nextMass = 0;
+            }
             Volume = volume;
-            Pressure = pressure;
+            mass = nextMass;
         }
 
         /// <summary>The volume, m³.</summary>
@@ -28,11 +38,14 @@ namespace RealisticBrakes.Core
         /// </summary>
         public void Resize(double volume)
         {
-            if (!(volume > 0))
+            if (!(volume > 0) || double.IsInfinity(volume))
                 throw new ArgumentOutOfRangeException(nameof(volume), volume, "A chamber needs a positive volume.");
             var pressure = Pressure;
+            var nextMass = Air.Mass(pressure, volume);
+            if (!IsFinite(nextMass) || !IsFinite(Air.Pressure(nextMass, volume)))
+                return;
             Volume = volume;
-            Pressure = pressure;
+            mass = nextMass > 0 ? nextMass : 0;
         }
 
         /// <summary>
@@ -41,20 +54,46 @@ namespace RealisticBrakes.Core
         /// </summary>
         public void Displace(double volume)
         {
-            if (!(volume > 0))
+            if (!(volume > 0) || double.IsInfinity(volume))
                 throw new ArgumentOutOfRangeException(nameof(volume), volume, "A chamber needs a positive volume.");
+            if (!IsFinite(Air.Pressure(mass, volume)))
+                return;
             Volume = volume;
         }
 
         /// <summary>The air held, kg.</summary>
-        public double Mass { get; set; }
+        public double Mass
+        {
+            get => mass;
+            set
+            {
+                if (!IsFinite(value))
+                    return;
+                var clamped = value > 0 ? value : 0;
+                if (IsFinite(Air.Pressure(clamped, Volume)))
+                    mass = clamped;
+            }
+        }
 
         /// <summary>The pressure, Pa absolute.</summary>
         public double Pressure
         {
-            get => Air.Pressure(Mass, Volume);
-            set => Mass = Air.Mass(value, Volume);
+            get => Air.Pressure(mass, Volume);
+            set
+            {
+                if (!IsFinite(value))
+                    return;
+                var next = Air.Mass(value, Volume);
+                if (IsFinite(next))
+                {
+                    var clamped = next > 0 ? next : 0;
+                    if (IsFinite(Air.Pressure(clamped, Volume)))
+                        mass = clamped;
+                }
+            }
         }
+
+        private static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
         /// <summary>The pressure, gauge bar.</summary>
         public double GaugeBar => Air.ToGaugeBar(Pressure);

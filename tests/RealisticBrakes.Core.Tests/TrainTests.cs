@@ -22,8 +22,8 @@ public class TrainTests
         var rig = new Rig(50);
         rig.Valve.Position = DriverValvePosition.Emergency;
         var t = rig.RunUntil(() => rig.Rear.Distributor!.Applied, 30);
-        // UIC 540: at least 250 m/s from the driver's valve to the last car's brake.
-        Assert.InRange(rig.Length / t, 245, 300);
+        // UIC 540: at least 250 m/s from the driver's valve to the last car's brake (~254 m/s here).
+        Assert.InRange(rig.Length / t, 250, 275);
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class TrainTests
         }, 120);
         Assert.InRange(front, 18, 30);
         Assert.True(rig.Time > front + 10, $"rear at {rig.Time:F1} s, front at {front:F1} s");
-        Assert.False(double.IsNaN(rear));
+        Assert.InRange(rear, 34, 46);
     }
 
     [Fact]
@@ -52,8 +52,9 @@ public class TrainTests
         rig.Valve.Position = DriverValvePosition.Running;
         var released = rig.RunUntil(() => rig.Rear.CylinderGauge < 0.4 * Air.Bar, 900);
         var recharged = rig.RunUntil(() => rig.Cars.Skip(1).All(c => c.Distributor!.AuxiliaryReservoir.GaugeBar > 4.9), 900);
-        Assert.InRange(released, 90, 300);
-        Assert.False(double.IsNaN(recharged));
+        // Rear releases in ~165 s (~2.6 min) and all reservoirs recharge past 4.9 bar in ~215 s (~3.5 min).
+        Assert.InRange(released, 140, 190);
+        Assert.InRange(released + recharged, 185, 245);
     }
 
     [Fact]
@@ -103,7 +104,8 @@ public class TrainTests
         // The empty reservoirs pull the pipe down behind the engine.
         Assert.True(rig.Rear.PipeSection.GaugeBar < 2);
         var charged = rig.RunUntil(() => rig.Cars.Skip(1).All(c => c.Distributor!.AuxiliaryReservoir.GaugeBar > 4.9), 3600);
-        Assert.InRange(charged, 3 * 60, 20 * 60);
+        // Charges 30 cold cars in about 8.6 minutes (~515 s).
+        Assert.InRange(charged, 450, 580);
     }
 
     [Fact]
@@ -189,6 +191,102 @@ public class TrainTests
         rig.Run(30);
         Assert.All(rig.Cars.Skip(1), c => Assert.InRange(c.CylinderGauge / Air.Bar, 0.5, 1.4));
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AnAirTrainSettlesAfterApplicationAndReleaseAndWakesOnInputChange(bool american)
+    {
+        // Mirrors BrakeSets.Tick's sleep gate (BrakeSets.SettledRate = 1.0 Pa/s): once ChangeRate < SettledRate
+        // with no changed input, Line.Advance is skipped until a control input changes and wakes the line.
+        const double settledRate = 1.0;
+        var rig = new Rig(10, american: american);
+
+        bool TickWithSleepGate(bool inputChanged)
+        {
+            if (!inputChanged && rig.Line.ChangeRate < settledRate)
+                return false;
+            // Advance a single exact frame (avoiding Rig.Run(Frame)'s floating-point elapsed loop).
+            rig.Line.Advance(Rig.Frame);
+            return true;
+        }
+
+        void AssertSleepsWhenUnchanged()
+        {
+            var before = rig.Cars.SelectMany(c => c.Chambers).Select(c => c.Pressure).ToArray();
+            for (var i = 0; i < 60; i++)
+                Assert.False(TickWithSleepGate(inputChanged: false));
+            Assert.Equal(before, rig.Cars.SelectMany(c => c.Chambers).Select(c => c.Pressure).ToArray());
+        }
+
+        rig.Service(1.0);
+        var settledApplied = rig.RunUntil(() => rig.Line.ChangeRate < settledRate, 240);
+        Assert.False(double.IsNaN(settledApplied), $"still changing while applied at {rig.Line.ChangeRate:F2} Pa/s");
+        AssertSleepsWhenUnchanged();
+
+        // Wake immediately on a release input change and confirm brakes respond.
+        var pipeBeforeRelease = rig.Cars[0].PipeSection.GaugeBar;
+        rig.Valve.Position = DriverValvePosition.Running;
+        Assert.True(TickWithSleepGate(inputChanged: true));
+        Assert.True(rig.Line.ChangeRate > settledRate, $"expected wake on release, got {rig.Line.ChangeRate:F2} Pa/s");
+        rig.Run(1);
+        Assert.True(rig.Cars[0].PipeSection.GaugeBar > pipeBeforeRelease + 0.05);
+
+        var settledReleased = rig.RunUntil(() => rig.Line.ChangeRate < settledRate, 360);
+        Assert.False(double.IsNaN(settledReleased), $"still changing after release at {rig.Line.ChangeRate:F2} Pa/s");
+        AssertSleepsWhenUnchanged();
+
+        // Wake immediately on a fresh service reduction.
+        rig.Service(0.5);
+        Assert.True(TickWithSleepGate(inputChanged: true));
+        Assert.True(rig.Line.ChangeRate > settledRate, $"expected wake on service, got {rig.Line.ChangeRate:F2} Pa/s");
+
+        // Settle again, then wake immediately on an independent brake input.
+        rig.Valve.Position = DriverValvePosition.Running;
+        Assert.False(double.IsNaN(rig.RunUntil(() => rig.Line.ChangeRate < settledRate, 360)));
+        AssertSleepsWhenUnchanged();
+        rig.Engine.Independent = 0.5;
+        Assert.True(TickWithSleepGate(inputChanged: true));
+        Assert.True(rig.Line.ChangeRate > settledRate, $"expected wake on independent, got {rig.Line.ChangeRate:F2} Pa/s");
+        rig.Run(1);
+        Assert.True(rig.Engine.Cylinder.GaugeBar > 0.3);
+    }
+
+    [Fact]
+    public void A100CarTrainPropagatesEmergencyAndStaysStableThroughServiceAndRelease()
+    {
+        // Emergency wave propagation on a 100-car (1,520 m) train (~247 m/s).
+        var emergency = new Rig(100);
+        emergency.Valve.Position = DriverValvePosition.Emergency;
+        var t = emergency.RunUntil(() => emergency.Rear.Distributor!.Applied, 30);
+        Assert.InRange(emergency.Length / t, 242, 275);
+        emergency.Run(10);
+        Assert.All(emergency.Cars.Skip(1), c => Assert.True(c.Distributor!.Applied));
+        Assert.All(emergency.Cars.SelectMany(c => c.Chambers), ch =>
+        {
+            Assert.True(double.IsFinite(ch.Pressure));
+            Assert.InRange(ch.Pressure, Air.Atmosphere - 1, Air.FromAbsoluteBar(9.5));
+        });
+
+        // Full service and release stability on a 90-car Passenger-mode train.
+        var service = new Rig(90, BrakingMode.Passenger);
+        service.Service(1.5);
+        var fullRear = service.RunUntil(() => service.Rear.CylinderGauge >= 3.5 * Air.Bar, 240);
+        Assert.False(double.IsNaN(fullRear), $"90-car rear only reached {service.Rear.CylinderGauge / Air.Bar:F2} bar");
+        Assert.All(service.Cars.Skip(1), c =>
+        {
+            Assert.True(c.Distributor!.Applied);
+            Assert.InRange(c.CylinderGauge / Air.Bar, 3.5, 3.85);
+        });
+        service.Valve.Position = DriverValvePosition.Running;
+        var released = service.RunUntil(() => service.Cars.Skip(1).All(c => !c.Distributor!.Applied && c.CylinderGauge < 0.1 * Air.Bar), 600);
+        Assert.False(double.IsNaN(released), "90-car train never released");
+        Assert.All(service.Cars.SelectMany(c => c.Chambers), ch =>
+        {
+            Assert.True(double.IsFinite(ch.Pressure));
+            Assert.InRange(ch.Pressure, Air.Atmosphere - 1, Air.FromAbsoluteBar(9.5));
+        });
+    }
 }
 
 public class ManualLapAndRestoreTests
@@ -252,6 +350,112 @@ public class ManualLapAndRestoreTests
         c.Resize(1.491);
         Assert.Equal(8, Air.ToAbsoluteBar(c.Pressure), 9);
         Assert.Equal(1.491, c.Volume);
+    }
+
+    [Fact]
+    public void ADriverBrakeValveRestoresAndClampsOvercharge()
+    {
+        var uic = new DriverBrakeValve(DriverBrakeValveSpec.Uic());
+        uic.RestoreOvercharge(-0.5 * Air.Bar);
+        Assert.Equal(0, uic.OverchargeLeft);
+        uic.RestoreOvercharge(2.0 * Air.Bar);
+        Assert.Equal(uic.Spec.FillLimit, uic.OverchargeLeft, 6);
+        uic.RestoreOvercharge(0.3 * Air.Bar);
+        Assert.Equal(0.3 * Air.Bar, uic.OverchargeLeft, 6);
+
+        var american = new DriverBrakeValve(DriverBrakeValveSpec.American());
+        american.RestoreOvercharge(2.0 * Air.Bar);
+        Assert.Equal(american.Spec.FillLimit, american.OverchargeLeft, 6);
+
+        var plainSpec = new DriverBrakeValveSpec { Overcharge = 0.4 * Air.Bar, StrokeLetDown = 0, LetsDownRelease = false };
+        var plain = new DriverBrakeValve(plainSpec);
+        plain.RestoreOvercharge(0.8 * Air.Bar);
+        Assert.Equal(plainSpec.Overcharge, plain.OverchargeLeft, 6);
+
+        // A restored overcharge lets down cleanly in running without applying cars.
+        var rig = new Rig(5);
+        foreach (var car in rig.Cars)
+            car.ChargeTo(Air.FromGaugeBar(5.3));
+        rig.Valve.RestoreOvercharge(0.3 * Air.Bar);
+        rig.Run(240);
+        Assert.Equal(0, rig.Valve.OverchargeLeft, 3);
+        Assert.All(rig.Cars.Skip(1), c => Assert.False(c.Distributor!.Applied));
+    }
+
+    [Fact]
+    public void ARestoredLocomotiveKeepsItsBailOffAndDistributorState()
+    {
+        var engine = new LocomotiveBrake(new LocomotiveBrakeSpec { MainReservoirVolume = 2.0 }, new DriverBrakeValve());
+        var car = new CarBrake(20, Rig.Geometry, locomotive: engine);
+        var wagon = new CarBrake(15, Rig.Geometry, new UicDistributor { Mode = BrakingMode.Passenger });
+        var pipe = Air.FromGaugeBar(4.2);
+        car.PipeSection.Pressure = pipe;
+        wagon.PipeSection.Pressure = pipe;
+        engine.MainReservoir.Pressure = Air.FromAbsoluteBar(9);
+        engine.Cylinder.Pressure = Air.Atmosphere;
+        engine.Distributor.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(5.0), Air.FromGaugeBar(2.0), pipe);
+        engine.BailedOff = 2.0 * Air.Bar;
+        engine.DriverValve!.EqualizingReservoir.Pressure = pipe;
+        engine.DriverValve.Position = DriverValvePosition.Service;
+        engine.DriverValve.ServiceReduction = 0.8 * Air.Bar;
+        wagon.Distributor!.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(5.0), Air.FromGaugeBar(2.0), pipe);
+
+        var line = new BrakeLine(new[] { car, wagon }, Rig.Geometry);
+        for (var i = 0; i < 60 * 15; i++)
+            line.Advance(Rig.Frame);
+
+        // Engine stays bailed while the wagon holds its application.
+        Assert.InRange(engine.Cylinder.GaugeBar, -0.001, 0.05);
+        Assert.InRange(wagon.CylinderGauge / Air.Bar, 1.8, 2.2);
+
+        // A deeper reduction reapplies the engine by the extra amount.
+        engine.DriverValve.ServiceReduction = 1.3 * Air.Bar;
+        for (var i = 0; i < 60 * 15; i++)
+            line.Advance(Rig.Frame);
+        Assert.InRange(engine.Cylinder.GaugeBar, 1.0, 1.5);
+
+        // Returning to running releases both and clears the bail.
+        engine.DriverValve.Position = DriverValvePosition.Running;
+        for (var i = 0; i < 60 * 30; i++)
+            line.Advance(Rig.Frame);
+        Assert.Equal(0, engine.BailedOff);
+        Assert.InRange(engine.Cylinder.GaugeBar, -0.001, 0.05);
+    }
+
+    [Fact]
+    public void ARestoredEtLocomotiveKeepsItsHeldAutomaticAndIndependentChamber()
+    {
+        var engine = new LocomotiveBrake(LocomotiveBrakeSpec.EtSteam(), new DriverBrakeValve(DriverBrakeValveSpec.H6()));
+        var car = new CarBrake(20, Rig.Geometry, locomotive: engine);
+        car.PipeSection.Pressure = Air.FromGaugeBar(5.0);
+        engine.MainReservoir.Pressure = Air.FromAbsoluteBar(8.6);
+        engine.Cylinder.Pressure = Air.FromGaugeBar(2.4);
+        engine.Distributor.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(5.0), Air.Atmosphere, Air.FromGaugeBar(5.0));
+        engine.HeldAutomatic = 2.4 * Air.Bar;
+        engine.IndependentChamber.Pressure = Air.FromGaugeBar(1.5);
+        engine.DriverValve!.EqualizingReservoir.Pressure = Air.FromGaugeBar(5.0);
+        engine.DriverValve.Position = DriverValvePosition.Holding;
+        engine.Independent = 0.5; // S-6 Lap
+
+        var line = new BrakeLine(new[] { car }, Rig.Geometry);
+        for (var i = 0; i < 60 * 10; i++)
+            line.Advance(Rig.Frame);
+        Assert.InRange(engine.Cylinder.GaugeBar, 2.35, 2.45);
+        Assert.InRange(engine.IndependentChamber.GaugeBar, 1.45, 1.55);
+
+        // Automatic to Running while S-6 stays in Lap still holds both.
+        engine.DriverValve.Position = DriverValvePosition.Running;
+        for (var i = 0; i < 60 * 10; i++)
+            line.Advance(Rig.Frame);
+        Assert.InRange(engine.Cylinder.GaugeBar, 2.35, 2.45);
+
+        // Moving S-6 to Running releases both the held automatic and the independent chamber.
+        engine.Independent = 0.25;
+        for (var i = 0; i < 60 * 10; i++)
+            line.Advance(Rig.Frame);
+        Assert.InRange(engine.Cylinder.GaugeBar, -0.001, 0.05);
+        Assert.Equal(0, engine.HeldAutomatic);
+        Assert.InRange(engine.IndependentChamber.GaugeBar, -0.001, 0.05);
     }
 }
 
@@ -449,6 +653,68 @@ public class BailOffTests
         var rig = new Rig(1);
         rig.Run(5);
         Assert.Equal(0, rig.Engine.BailOff());
+    }
+
+    [Fact]
+    public void EuropeanGraduatedBailHoldsSteadyInServiceAndLapAddsFurtherApplicationAndClearsOnRelease()
+    {
+        var rig = new Rig(5, BrakingMode.Passenger);
+        Assert.True(rig.Engine.Spec.GraduatedBail);
+        Assert.False(rig.Engine.Spec.HoldsAutomaticBrake);
+
+        // Apply service reduction (~2.03 bar), then hold graduated bail at 1 bar/s for 1 s.
+        rig.Service(0.8);
+        rig.Run(20);
+        var applied = rig.Engine.Cylinder.GaugeBar;
+        Assert.InRange(applied, 1.9, 2.2);
+
+        var bailed = 0.0;
+        for (var t = 0.0; t < 1.0; t += Rig.Frame)
+        {
+            bailed += rig.Engine.BailOffBy(1.0 * Air.Bar * Rig.Frame);
+            rig.Run(Rig.Frame);
+        }
+        Assert.InRange(bailed / Air.Bar, 0.95, 1.05);
+        Assert.True(rig.Engine.HeldInRelease);
+
+        // Letting go counts down HeldInRelease and holds the partial BailedOff cleanly without snapping back.
+        rig.Run(LocomotiveBrake.BailHold + 0.1);
+        Assert.False(rig.Engine.HeldInRelease);
+        rig.Run(20);
+        var partial = rig.Engine.Cylinder.GaugeBar;
+        Assert.InRange(partial, applied - 1.1, applied - 0.9);
+        Assert.InRange(rig.Engine.BailedOff / Air.Bar, 0.95, 1.05);
+        // The train stays fully applied.
+        Assert.InRange(rig.Rear.CylinderGauge / Air.Bar, 1.9, 2.2);
+
+        // Also holds steady in manual lap.
+        rig.Valve.Position = DriverValvePosition.Lap;
+        rig.Run(30);
+        Assert.InRange(rig.Engine.Cylinder.GaugeBar, partial - 0.05, partial + 0.05);
+        Assert.InRange(rig.Engine.BailedOff / Air.Bar, 0.95, 1.05);
+
+        // Further application adds back on top of what remained.
+        rig.Service(1.2);
+        rig.Run(20);
+        Assert.InRange(rig.Engine.Cylinder.GaugeBar, partial + 0.9, partial + 1.15);
+
+        // Full train release clears BailedOff cleanly, so the next application applies the engine in full.
+        rig.Valve.Position = DriverValvePosition.Running;
+        rig.Run(60);
+        Assert.Equal(0, rig.Engine.BailedOff);
+        Assert.InRange(rig.Engine.Cylinder.GaugeBar, -0.001, 0.05);
+
+        rig.Service(0.8);
+        rig.Run(20);
+        Assert.InRange(rig.Engine.Cylinder.GaugeBar, 1.9, 2.2);
+    }
+
+    [Fact]
+    public void EuropeanGraduatedBailSpecMatchesEquipmentStandard()
+    {
+        Assert.True(new LocomotiveBrakeSpec().GraduatedBail);
+        Assert.True(LocomotiveBrakeSpec.EtSteam().GraduatedBail);
+        Assert.False(LocomotiveBrakeSpec.American().GraduatedBail);
     }
 }
 

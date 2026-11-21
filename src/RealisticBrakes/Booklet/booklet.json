@@ -1,5 +1,5 @@
 {
-  "edition": "1.4.5",
+  "edition": "1.5.0",
   "size": [
     1224,
     1584
@@ -19,7 +19,13 @@
     "page-12.jpg",
     "page-13.jpg",
     "page-14.jpg",
-    "page-15.jpg"
+    "page-15.jpg",
+    "page-16.jpg",
+    "page-17.jpg",
+    "page-18.jpg",
+    "page-19.jpg",
+    "page-20.jpg",
+    "page-21.jpg"
   ],
   "tabs": {
     "x0": 1136,
@@ -33,7 +39,7 @@
         "last": 1
       },
       {
-        "label": "THE AIR BRAKE",
+        "label": "AIR BRAKE",
         "first": 2,
         "last": 2
       },
@@ -61,6 +67,11 @@
         "label": "SETTINGS",
         "first": 14,
         "last": 14
+      },
+      {
+        "label": "VACUUM",
+        "first": 15,
+        "last": 20
       }
     ]
   },
@@ -69,7 +80,7 @@
     "x0": 90,
     "x1": 1100,
     "y0": 300,
-    "rowHeight": 74,
+    "rowHeight": 58,
     "targets": [
       2,
       3,
@@ -82,7 +93,12 @@
       10,
       12,
       13,
-      14
+      14,
+      15,
+      15,
+      16,
+      18,
+      20
     ]
   }
 }

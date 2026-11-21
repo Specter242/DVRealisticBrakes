@@ -57,6 +57,23 @@ public class HoldingTests
         Assert.False(Holding.ForceKeptByOtherMod("LocoS282A", wardaleBrakesActive: true));
         Assert.False(Holding.ForceKeptByOtherMod(null, wardaleBrakesActive: true));
     }
+
+    [Fact]
+    public void WeighReturnsMassGradeForcesAndBrakeState()
+    {
+        var rolling = Holding.Weigh(Cut(10, 1, 1.5));
+        Assert.Equal(10 * Mass, rolling.Mass, 3);
+        Assert.Equal(1.5, rolling.GradePercent, 4);
+        Assert.Equal(Holding.HoldingForce(Cut(10, 1, 1.5)), rolling.HoldingForce, 3);
+        Assert.Equal(Holding.Pull(Cut(10, 1, 1.5)), rolling.Pull, 3);
+        Assert.True(rolling.HasBrakes);
+        Assert.False(rolling.Holds);
+
+        var unbraked = Holding.Weigh(Cut(4, 0, 0.5));
+        Assert.False(unbraked.HasBrakes);
+        Assert.Equal(0.5, unbraked.GradePercent, 4);
+        Assert.False(unbraked.Holds);
+    }
 }
 
 public class WeighedCutTests
@@ -113,5 +130,69 @@ public class WeighedCutTests
         var cut = new Holding.Weighed();
         cut.Record(7, 500.0, holds: true);
         Assert.True(cut.Due(7, 3.0));
+    }
+
+    [Fact]
+    public void RecordReportsBrakedRollOnceAndIgnoresGradeJitterAndUnbrakedCuts()
+    {
+        var cut = new Holding.Weighed();
+        var holdsWithMargin = new Holding.CutWeight(800_000, 120_000, 100_000, hasBrakes: true);
+        var holdsBarely = new Holding.CutWeight(800_000, 102_000, 100_000, hasBrakes: true);
+        var rolling = new Holding.CutWeight(800_000, 99_000, 100_000, hasBrakes: true);
+
+        // Newly weighed and holding: no roll log.
+        Assert.False(cut.Record(1, 10.0, holdsWithMargin));
+        Assert.True(cut.Holds);
+
+        // Transitions from holding to rolling: logged once.
+        Assert.True(cut.Record(2, 10.5, rolling));
+        Assert.False(cut.Holds);
+
+        // Still rolling on later weighings: no repeat spam.
+        Assert.False(cut.Record(2, 11.0, rolling));
+        Assert.False(cut.Record(3, 11.2, rolling));
+
+        // Grade jitter across the threshold (holds by <10% margin, then fails again): physics Holds flips cleanly,
+        // but the roll log stays disarmed so jitter never spams.
+        Assert.False(cut.Record(3, 11.7, holdsBarely));
+        Assert.True(cut.Holds);
+        Assert.False(cut.Record(3, 12.2, rolling));
+        Assert.False(cut.Holds);
+
+        // Once the cut genuinely holds with >=10% margin, the roll log rearms.
+        Assert.False(cut.Record(4, 12.5, holdsWithMargin));
+        Assert.True(cut.Holds);
+        Assert.True(cut.Record(5, 13.0, rolling));
+        Assert.False(cut.Holds);
+
+        // Newly weighed braked cut already not holding: logged once, then quiet.
+        var freshRolling = new Holding.Weighed();
+        Assert.True(freshRolling.Record(1, 1.0, rolling));
+        Assert.False(freshRolling.Record(1, 1.5, rolling));
+
+        // Completely unbraked cuts never log, even on a grade.
+        var unbraked = new Holding.Weighed();
+        var unbrakedRolling = new Holding.CutWeight(320_000, 6_278, 31_392, hasBrakes: false);
+        Assert.False(unbraked.Record(1, 1.0, unbrakedRolling));
+        Assert.False(unbraked.Holds);
+        Assert.False(unbraked.Record(1, 1.5, unbrakedRolling));
+        // Once brakes are applied and still can't hold, it logs once.
+        Assert.True(unbraked.Record(2, 2.0, rolling));
+        Assert.False(unbraked.Record(2, 2.5, rolling));
+
+        // Occupied/non-loggable cuts do not log or consume the armed state: once vacated while still rolling, it logs once.
+        var occupied = new Holding.Weighed();
+        Assert.False(occupied.Record(1, 1.0, rolling, loggable: false));
+        Assert.False(occupied.Holds);
+        Assert.True(occupied.Record(1, 1.5, rolling, loggable: true));
+        Assert.False(occupied.Record(1, 2.0, rolling, loggable: true));
+
+        // Occupied/non-loggable cuts also do not rearm a disarmed roll log: holding with margin while occupied, then
+        // losing hold and vacating, must not re-log.
+        Assert.False(occupied.Record(2, 2.5, holdsWithMargin, loggable: false));
+        Assert.True(occupied.Holds);
+        Assert.False(occupied.Record(3, 3.0, rolling, loggable: false));
+        Assert.False(occupied.Holds);
+        Assert.False(occupied.Record(3, 3.5, rolling, loggable: true));
     }
 }

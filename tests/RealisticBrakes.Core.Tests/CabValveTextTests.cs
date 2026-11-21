@@ -1,3 +1,4 @@
+using System.Globalization;
 using RealisticBrakes.Core;
 
 namespace RealisticBrakes.Core.Tests;
@@ -106,5 +107,81 @@ public class CabValveTextTests
         rig.Engine.Independent = 0.5;
         rig.Run(1);
         Assert.Equal("Independent brake: 1.9 bar (of 3.8)", CabValveText.Independent(rig.Engine, true));
+    }
+
+    [Fact]
+    public void CutOutDistinguishesTrailingFromLoneEngine()
+    {
+        var rig = Steam();
+        rig.Valve.CutIn = false;
+        Assert.Equal(
+            "Train brake: cut out (the leading engine's valve works the pipe)",
+            CabValveText.TrainBrake(rig.Engine, selfLapping: false));
+        Assert.Equal(
+            "Train brake: cut out (the leading engine's valve works the pipe)",
+            CabValveText.TrainBrake(rig.Engine, selfLapping: false, anotherValveCutIn: true));
+        Assert.Equal(
+            "Train brake: cut out (no brake valve working the pipe — cut it in to control the train)",
+            CabValveText.TrainBrake(rig.Engine, selfLapping: false, anotherValveCutIn: false));
+    }
+
+    [Fact]
+    public void FormatsNumbersWithInvariantCulture()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+
+            var diesel = new Rig(5, american: true, driver: DriverBrakeValveSpec.American());
+            diesel.Service(0.75);
+            Assert.Equal("Train brake: service (0.75 bar reduction)", CabValveText.TrainBrake(diesel.Engine, selfLapping: true));
+            diesel.Service(1.5);
+            Assert.Equal("Train brake: full service (1.5 bar reduction)", CabValveText.TrainBrake(diesel.Engine, selfLapping: true));
+
+            var independent = new Rig(5);
+            independent.Engine.Independent = 0.5;
+            independent.Run(1);
+            Assert.Equal("Independent brake: 1.9 bar (of 3.8)", CabValveText.Independent(independent.Engine, true));
+
+            var steam = Steam();
+            steam.Valve.Position = DriverValvePosition.Lap;
+            steam.Run(0.5);
+            Assert.Matches(@"^Train brake: lap \(equalizing reservoir 5\.0 bar\)$", CabValveText.TrainBrake(steam.Engine, selfLapping: false));
+            steam.Valve.Position = DriverValvePosition.Apply;
+            steam.Run(0.5);
+            Assert.Matches(@"^Train brake: service \(equalizing reservoir coming down, \d+\.\d bar; lap to hold it\)$", CabValveText.TrainBrake(steam.Engine, selfLapping: false));
+            steam.Service(1.5);
+            steam.Run(30);
+            steam.Engine.BailOffBy(1.0 * Air.Bar);
+            steam.Run(1);
+            Assert.Matches(@"^Independent brake: running; train brake on the engine 2\.\d bar, 1\.0 bailed off \(click and hold to bail off\)$",
+                CabValveText.Independent(steam.Engine, true));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
+    public void EuropeanAndAmericanSelfLappingEnginesShowTheirBailHints()
+    {
+        var european = new Rig(5);
+        european.Service(1.5);
+        european.Run(20);
+        Assert.Matches(@"^Independent brake: released; train brake on the engine 3\.\d bar \(click to bail off, hold to graduate\)$",
+            CabValveText.Independent(european.Engine, true));
+        european.Engine.BailOffBy(1.0 * Air.Bar);
+        european.Run(1);
+        Assert.Matches(@"^Independent brake: released; train brake on the engine 2\.\d bar, 1\.0 bailed off \(click to bail off, hold to graduate\)$",
+            CabValveText.Independent(european.Engine, true));
+        Assert.DoesNotContain("bail off)", CabValveText.Independent(european.Engine, false));
+
+        var american = new Rig(5, american: true, engine: LocomotiveBrakeSpec.American(), driver: DriverBrakeValveSpec.American());
+        american.Service(1.5);
+        american.Run(20);
+        Assert.Matches(@"^Independent brake: released; train brake on the engine 3\.\d bar \(click to bail off\)$",
+            CabValveText.Independent(american.Engine, true));
     }
 }

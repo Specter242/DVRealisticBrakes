@@ -81,11 +81,16 @@ namespace RealisticBrakes.Core
                 ChangeRate = double.PositiveInfinity;
                 return;
             }
-            var steps = (int)Math.Ceiling(dt / substep);
-            if (steps > MaxSubsteps)
+            var rawSteps = Math.Ceiling(dt / substep);
+            int steps;
+            if (rawSteps > MaxSubsteps)
             {
                 steps = MaxSubsteps;
                 dt = steps * substep;
+            }
+            else
+            {
+                steps = Math.Max(1, (int)rawSteps);
             }
             var h = dt / steps;
             SetControlReservoirCeiling();
@@ -127,7 +132,7 @@ namespace RealisticBrakes.Core
 
         private void ShareMainReservoirs(double dt)
         {
-            LocomotiveBrake last = null;
+            Chamber last = null;
             for (var i = 0; i < cars.Length; i++)
             {
                 if (!mainReservoirPiped[i])
@@ -135,13 +140,17 @@ namespace RealisticBrakes.Core
                     last = null;
                     continue;
                 }
-                var engine = cars[i].Locomotive;
-                if (engine == null)
+                var reservoir = MainReservoirOf(cars[i]);
+                if (reservoir == null)
                     continue;
                 if (last != null)
-                    MainReservoirHose.Pass(last.MainReservoir, engine.MainReservoir, dt);
-                last = engine;
+                    MainReservoirHose.Pass(last, reservoir, dt);
+                last = reservoir;
             }
         }
+
+        private static Chamber MainReservoirOf(CarBrake car) =>
+            car.Locomotive?.MainReservoir
+            ?? (car.VacuumEngine != null && !car.VacuumEngine.Spec.SteamBrake ? car.VacuumEngine.MainReservoir : null);
     }
 }

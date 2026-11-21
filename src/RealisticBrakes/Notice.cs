@@ -13,18 +13,34 @@ namespace RealisticBrakes
 
         private GUIStyle style;
 
+        // Test hooks for adapter checks running without Unity's native Time.time; null in game.
+        internal static System.Action<string> ShowObserver;
+        internal static System.Action<string> WarnObserver;
+
         /// <summary>Shows <paramref name="message"/> for <paramref name="seconds"/> s, unless the brake controls' text is off, and logs it.</summary>
         public static void Show(string message, float seconds = Seconds)
         {
             Main.Mod?.Logger.Log(message);
             if (Main.Settings == null || Main.Settings.ShowValveText)
+            {
+                if (ShowObserver != null)
+                {
+                    ShowObserver(message);
+                    return;
+                }
                 Display(message, seconds);
+            }
         }
 
         /// <summary>Shows <paramref name="message"/> for <paramref name="seconds"/> s whatever the settings, and logs it as a warning: a real problem.</summary>
         public static void Warn(string message, float seconds = Seconds)
         {
             Main.Mod?.Logger.Warning(message);
+            if (WarnObserver != null)
+            {
+                WarnObserver(message);
+                return;
+            }
             Display(message, seconds);
         }
 

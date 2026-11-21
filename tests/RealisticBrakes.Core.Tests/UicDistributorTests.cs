@@ -256,4 +256,62 @@ public class UicDistributorTests
         Assert.Equal(0, valve.Cylinder.GaugeBar, 3);
         Assert.Equal(0, valve.PipeDraw);
     }
+
+    [Fact]
+    public void RestoreSetsReleasedAndAppliedStatesFromPressures()
+    {
+        var released = new UicDistributor();
+        released.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(4.8), 0, Air.FromGaugeBar(4.95));
+        Assert.False(released.Applied);
+        Assert.Equal(0, released.DeepestReduction);
+        Assert.Equal(Air.Atmosphere, released.Cylinder.Pressure, 6);
+        Assert.Equal(Air.Atmosphere, released.QuickServiceChamber.Pressure, 6);
+        Assert.Equal(5.0, released.ControlReservoir.GaugeBar, 6);
+        Assert.Equal(4.8, released.AuxiliaryReservoir.GaugeBar, 6);
+
+        var applied = new UicDistributor();
+        applied.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(4.7), Air.FromGaugeBar(1.9), Air.FromGaugeBar(4.25));
+        Assert.True(applied.Applied);
+        Assert.Equal(0.75 * Air.Bar, applied.DeepestReduction, 3);
+        Assert.Equal(1.9, applied.Cylinder.GaugeBar, 6);
+    }
+
+    [Fact]
+    public void RestoreLatchPreservesGraduatedReleaseAndClearsWhenReleased()
+    {
+        var valve = new UicDistributor { Mode = BrakingMode.Passenger };
+        var pipe = new Chamber(1000, Air.FromGaugeBar(4.92));
+        // Pipe is within ApplyThreshold (0.1 bar) of CR, but still past ReleaseThreshold (0.05 bar): mid-graduated release.
+        valve.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(5.0), Air.FromGaugeBar(0.25), pipe.Pressure);
+        Assert.False(valve.Applied);
+        valve.RestoreLatch(applied: true, deepest: 1.0 * Air.Bar);
+        Assert.True(valve.Applied);
+        Assert.Equal(1.0 * Air.Bar, valve.DeepestReduction, 6);
+
+        Hold(valve, pipe, 4.92, () => false, 20);
+        // Because deepestReduction > reduction + ReleasingMargin, the first-stage 0.6 bar floor does not re-engage.
+        Assert.True(valve.Applied);
+        Assert.InRange(valve.Cylinder.GaugeBar, 0.15, 0.30);
+
+        valve.RestoreLatch(applied: false, deepest: 1.0 * Air.Bar);
+        Assert.False(valve.Applied);
+        Assert.Equal(0, valve.DeepestReduction);
+    }
+
+    [Fact]
+    public void RestoreReleaseValveResumesVentingControlReservoirUntilReleased()
+    {
+        var valve = new UicDistributor { Mode = BrakingMode.Passenger };
+        var pipe = new Chamber(1000, Air.Atmosphere);
+        valve.Restore(Air.FromGaugeBar(5.0), Air.FromGaugeBar(4.5), Air.FromGaugeBar(3.8), pipe.Pressure);
+        Assert.True(valve.Applied);
+        valve.RestoreReleaseValve(true);
+        Assert.True(valve.ReleaseValveOpen);
+
+        Hold(valve, pipe, 0, () => false, 60);
+        Assert.False(valve.Applied);
+        Assert.False(valve.ReleaseValveOpen);
+        Assert.Equal(0, valve.Cylinder.GaugeBar, 2);
+        Assert.Equal(4.5, valve.AuxiliaryReservoir.GaugeBar, 4);
+    }
 }

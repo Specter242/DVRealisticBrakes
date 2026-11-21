@@ -1,3 +1,4 @@
+using System;
 using DV.Simulation.Brake;
 using HarmonyLib;
 using Newtonsoft.Json.Linq;
@@ -11,9 +12,16 @@ namespace RealisticBrakes.Patches
     {
         private static void Postfix(TrainCar car, JObject __result)
         {
-            var entry = SavedAir.Write(car != null ? car.brakeSystem : null);
-            if (entry != null && __result != null)
-                __result[SavedAir.Key] = entry;
+            try
+            {
+                var entry = SavedAir.Write(car != null ? car.brakeSystem : null);
+                if (entry != null && __result != null)
+                    __result[SavedAir.Key] = entry;
+            }
+            catch (Exception e)
+            {
+                Main.Mod?.Logger.Warning($"Failed to save Realistic Brakes state for {(car != null ? car.ID : "a car")}: {e}");
+            }
         }
     }
 
@@ -23,8 +31,15 @@ namespace RealisticBrakes.Patches
     {
         private static void Postfix(JObject carData, TrainCar __result)
         {
-            if (__result != null && carData != null && carData[SavedAir.Key] is JObject entry)
-                SavedAir.Hold(__result.brakeSystem, entry);
+            try
+            {
+                if (__result != null && carData != null && carData[SavedAir.Key] is JObject entry)
+                    SavedAir.Hold(__result.brakeSystem, entry);
+            }
+            catch (Exception e)
+            {
+                Main.Mod?.Logger.Warning($"Failed to load Realistic Brakes state for {(__result != null ? __result.ID : "a car")}: {e}");
+            }
         }
     }
 }

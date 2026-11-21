@@ -20,6 +20,13 @@ namespace RealisticBrakes.Controls
         private SteppedJoint joint;
         private IndependentBailClick bail;
 
+        // Let go by a hand here, and not yet home out of release or quick application: the spring takes it there. A handle
+        // as the cab loads is taken home too, unless this game is a guest, whose handles are the host's.
+        private bool springHome = !Sim.Net.IsGuest;
+
+        // The notch a controller's axis holds the handle at; -1 before the axis takes it.
+        private int axisNotch = -1;
+
         /// <summary>Whether this handle has the release notch: a stepped lever, given the S-6's five notches.</summary>
         public bool HasReleaseNotch => sprungByJoint;
 
@@ -89,22 +96,55 @@ namespace RealisticBrakes.Controls
             // European equipment, or its train left to the game's brake, the handle is an ordinary independent again, and
             // sprung out of its bottom notch it rested a quarter applied until the cab was loaded afresh.
             var s6 = Main.Active && IsS6(car) && Sim.BrakeSets.TryGet(car.brakeSystem, out _);
-            if (joint.useInnerLimitSpring != s6)
-            {
-                joint.useInnerLimitSpring = s6;
-                cachedAngle(joint) = float.NaN;
-            }
             if (!s6)
             {
+                Spring(false);
+                springHome = false;
                 HoldRelease(false);
                 return;
             }
             var value = control.Value;
-            // Held by a hand (grabbed), or by a key or the scroll wheel (the spring off while they turn it).
-            var held = control.IsGrabbed() || !joint.isSpringActive;
-            if (!held && (LocomotiveBrake.InRelease(value) || LocomotiveBrake.PositionOf(value) == IndependentPosition.QuickApplication))
+            var atEnd = LocomotiveBrake.InRelease(value) || LocomotiveBrake.PositionOf(value) == IndependentPosition.QuickApplication;
+            // Held by a hand (grabbed), or by a key or the scroll wheel (the spring off while they turn it); or by an axis.
+            var hand = control.IsGrabbed() || !joint.isSpringActive;
+            var axis = Axis(control);
+            if (hand && !axis)
+                springHome = true;
+            else if (!hand && !atEnd)
+                springHome = false;
+            // The spring acts for a hand here and as that hand lets go, until the handle is home; never on a value set from
+            // outside, nor under an axis, which holds the handle where it puts it.
+            var spring = !axis && (hand || springHome);
+            Spring(spring);
+            if (spring && !hand && atEnd)
                 cachedAngle(joint) = float.NaN;
-            HoldRelease(held && LocomotiveBrake.InRelease(value));
+            HoldRelease((hand || axis) && LocomotiveBrake.InRelease(value));
+        }
+
+        // The S-6's spring out of release and quick application, on or off; the joint re-aims either way.
+        private void Spring(bool on)
+        {
+            if (joint.useInnerLimitSpring == on)
+                return;
+            joint.useInnerLimitSpring = on;
+            cachedAngle(joint) = float.NaN;
+        }
+
+        // Whether a controller's axis drives the handle: the game writes it every frame, until a hand takes the handle.
+        private static bool Axis(ControlImplBase control) => control.LastSetValueSource == ControlImplBase.SetValueSource.Analog;
+
+        /// <summary>
+        /// Where a controller's axis at <paramref name="value"/> puts the S-6 handle: on a notch, moved only past the deadband
+        /// (<see cref="AxisNotches"/>). The value as it is, where the handle isn't the S-6 now.
+        /// </summary>
+        public float FromAxis(float value)
+        {
+            if (!sprungByJoint || control == null || !Main.Active || !IsS6(car))
+                return value;
+            if (!Axis(control))
+                axisNotch = -1;
+            axisNotch = AxisNotches.Snap(value, Notches, axisNotch);
+            return AxisNotches.Value(axisNotch, Notches);
         }
 
         private void HoldRelease(bool held)

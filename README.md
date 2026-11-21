@@ -3,9 +3,9 @@
 A Unity Mod Manager mod that rebuilds Derail Valley's air brake car by car.
 Every car has its own length of brake pipe, its own reservoirs, and its own
 valve, so a brake application travels down the train in real time. European
-(UIC) or American (AB) equipment, steam brake valves with an equalizing
-reservoir, car levers, hand brakes that hold only what they can, and
-bailing off, with optional Multiplayer integration.
+(UIC) or American (AB) equipment, or the automatic vacuum brake, steam brake
+valves with an equalizing reservoir, car levers, hand brakes that hold only
+what they can, and bailing off, with optional Multiplayer integration.
 
 Requires Derail Valley and Unity Mod Manager 0.28.2 or newer. Game and
 third-party mod assemblies are not included.
@@ -50,6 +50,8 @@ var pressure = api?.GetMethod("Pressure");
 var pipe = pressure != null ? (float)pressure.Invoke(null, new object[] { car, "BrakePipe" }) : float.NaN;
 ```
 
+- `int ApiVersion`: the API revision (currently `2`; older builds have no
+  `ApiVersion` property).
 - `bool Active`: whether this mod is running the brake now. When it isn't,
   the game's own brake runs.
 - `float Pressure(TrainCar car, string part)`: a part's pressure on the
@@ -64,10 +66,12 @@ var pipe = pressure != null ? (float)pressure.Invoke(null, new object[] { car, "
   - `MainReservoir` and `EqualizingReservoir`: engines.
 
   It returns NaN where the car has no such part, for a name that isn't one
-  of these, and when this mod isn't running the car's brake.
-- `string Equipment(TrainCar car)`: `"European"` or `"American"`, what the
-  car's brake runs on now (each engine has its own prototype's, the cars
-  the setting's); null when this mod isn't running the car's brake.
+  of these, on the vacuum brake (whose parts aren't air), and when this mod
+  isn't running the car's brake.
+- `string Equipment(TrainCar car)`: `"European"`, `"American"`, or
+  `"Vacuum"`, what the car's brake runs on now (each air engine has its own
+  prototype's, the cars the setting's; on vacuum, every car); null when
+  this mod isn't running the car's brake.
 - `string BrakeMode(TrainCar car)`: the G/P mode a European car's
   distributor runs in, `"Goods"` (slow to apply and release, for a long
   train) or `"Passenger"` (quick); engines and coaches run in Passenger.
@@ -83,11 +87,14 @@ var pipe = pressure != null ? (float)pressure.Invoke(null, new object[] { car, "
   `BrakeMode`, `CutOut`, and `BrakeValveCutOut` all return null when this
   mod isn't running the car's brake. They only read; the levers stay the
   player's.
-- `float BailOff(TrainCar car)`: bails off an engine, as a click on its
-  independent brake lever does. The engine lets go of the train brake's
-  application then on, while the train's brakes stay applied, until the
-  next release. It returns the cylinder pressure let off, in gauge bar,
-  and 0 when there was nothing to bail or the car isn't an engine.
+- `float BailOff(TrainCar car)`: bails off an engine and any engines joined
+  to it by multiple-unit cable, and reports the bail in multiplayer, as a
+  click on its independent brake lever does (without showing a HUD notice).
+  The engines let go of the train brake's application then on, while the
+  train's brakes stay applied, until the next release. It returns the
+  cylinder pressure let off on `car`, in gauge bar, and 0 when this mod
+  isn't active, `car` is null or not an engine, or there was nothing to
+  bail on `car`.
 
 The game's own `BrakeSystem` fields carry this mod's pressures too, every
 frame, in the game's absolute bar (1.0 is atmospheric): `brakePipePressure`

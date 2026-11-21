@@ -19,8 +19,9 @@ namespace RealisticBrakes.Sim
     {
         private static readonly PipeGeometry AirPipe = PipeGeometry.Uic();
 
-        /// <summary>The 1¼ in air pipe.</summary>
-        public static PipeGeometry Geometry => AirPipe;
+        private static readonly PipeGeometry VacuumPipe = PipeGeometry.VacuumTrainPipe();
+
+ public static PipeGeometry Geometry => Main.Settings != null && Main.Settings.Equipment == Equipment.Vacuum ? VacuumPipe : AirPipe;
 
         private static readonly ConditionalWeakTable<BrakeSystem, CarAir> cars = new ConditionalWeakTable<BrakeSystem, CarAir>();
         private static readonly ConditionalWeakTable<Brakeset, BrakeLine> lines = new ConditionalWeakTable<Brakeset, BrakeLine>();
@@ -199,9 +200,6 @@ namespace RealisticBrakes.Sim
         /// <summary>Whether the model ran <paramref name="system"/>'s car this frame.</summary>
         public static bool Handles(BrakeSystem system) => Main.Active && TryGet(system, out var air) && air.Handled;
 
-        /// <summary>
-        /// Whether the pipe blows out at <paramref name="hose"/>, a set's end: its cock open with no hose coupled to it.
-        /// </summary>
         internal static bool Vents(HoseAndCock hose) => hose != null && hose.cockOpen && hose.connectedTo == null;
 
  internal static bool VentsThroughClosedCock(HoseAndCock hose) =>
@@ -273,7 +271,7 @@ namespace RealisticBrakes.Sim
         private static float SetPressure(Brakeset set, BrakeLine line)
         {
             var pressure = line.Pipe[DrivingIndex(line)].Pressure;
-            return CarAir.Bar(pressure);
+            return CarAir.Bar(line.Pipe.Geometry == VacuumPipe ? Vacuum.AirEquivalent(pressure) : pressure);
         }
 
         /// <summary>The car of <paramref name="line"/> whose driver's valve is cut in, working the train, or the first when none is.</summary>
@@ -282,7 +280,7 @@ namespace RealisticBrakes.Sim
             for (var i = 0; i < line.Cars.Count; i++)
             {
                 var car = line.Cars[i];
-                if (car.Locomotive?.DriverValve?.CutIn == true)
+                if (car.Locomotive?.DriverValve?.CutIn == true || car.VacuumEngine?.CutIn == true)
                     return i;
             }
             return 0;

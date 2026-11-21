@@ -53,6 +53,12 @@ namespace RealisticBrakes.Sim
 
         /// <summary>Sends this game's player's <paramref name="action"/> on, already done here: a guest's to the host, the host's to its guests.</summary>
         void Report(NetAction action);
+
+        /// <summary>Sends the host's updated model settings to connected guests; nothing when not hosting.</summary>
+        void NotifyHostSettingsChanged();
+
+        /// <summary>Per-frame maintenance for the session, such as expiring a missing join snapshot.</summary>
+        void Tick();
     }
 
  internal static class Net
@@ -72,6 +78,16 @@ namespace RealisticBrakes.Sim
             if (!applying && Link != null && action.Car != null)
                 Link.Report(action);
         }
+
+        /// <summary>Sends the host's updated model settings to connected guests; nothing playing alone or as a guest.</summary>
+        public static void NotifyHostSettingsChanged()
+        {
+            if (!applying && Link != null && !Link.IsGuest)
+                Link.NotifyHostSettingsChanged();
+        }
+
+        /// <summary>Per-frame maintenance for the active multiplayer link; nothing playing alone.</summary>
+        public static void Tick() => Link?.Tick();
 
         /// <summary>
         /// Does a player's (<paramref name="player"/>) <paramref name="action"/>
@@ -182,8 +198,9 @@ namespace RealisticBrakes.Sim
 
         /// <summary>
         /// A player leaves the session (<paramref name="player"/>; everyone,
-        /// when null): their hands come off the bleed handles and the sprung
-        /// filling strokes. Returns what ended, for the host to tell its guests.
+        /// when null): their hands come off the bleed handles, sprung filling
+        /// strokes, and Angleichen keys. Returns what ended, for the host to
+        /// tell its guests.
         /// </summary>
         public static List<NetAction> ReleaseHands(byte? player)
         {
@@ -197,6 +214,8 @@ namespace RealisticBrakes.Sim
                     }
             foreach (var car in TrainBrakeHandle.ReleaseHands(player))
                 ended.Add(new NetAction(car, NetActionKind.HandleZone, 0, (byte)HandleZone.Travel));
+            foreach (var car in AdjustKey.ReleaseHands(player))
+                ended.Add(new NetAction(car, NetActionKind.Adjust, 0, 0));
             return ended;
         }
 
@@ -213,6 +232,7 @@ namespace RealisticBrakes.Sim
             {
                 levers.Remove(car);
                 holders.Remove(car);
+                AdjustKey.Forget(car);
             }
             TrainBrakeHandle.Forget(system);
         }
@@ -226,6 +246,8 @@ namespace RealisticBrakes.Sim
         {
             ReleaseHands(null);
             levers = new ConditionalWeakTable<TrainCar, Dictionary<CarLeverKind, byte>>();
+            HostSettings = null;
+            warnedMismatch = null;
         }
 
         // Each car's lever settings in the session, as last set by anyone.
@@ -292,8 +314,14 @@ namespace RealisticBrakes.Sim
         /// <summary>This player's own model settings while a host's are in use; null otherwise.</summary>
         internal static ModelSettings? OwnSettings { get; private set; }
 
+        /// <summary>The host's authoritative model settings while this player is a guest; null otherwise.</summary>
+        internal static ModelSettings? HostSettings { get; private set; }
+
+        // Version and build flavor already warned about in this session, so repeated updates don't spam the warning.
+        private static (string Version, string Flavor)? warnedMismatch;
+
         /// <summary>A guest takes its host's model settings for the session, keeping its own to give back.</summary>
-        public static void AdoptHostSettings(ModelSettings host, string hostVersion)
+        public static void AdoptHostSettings(ModelSettings host, string hostVersion, string hostFlavor = "")
         {
             var settings = Main.Settings;
             if (settings == null)
@@ -301,17 +329,35 @@ namespace RealisticBrakes.Sim
             var mine = ModelSettings.From(settings);
             if (OwnSettings == null)
                 OwnSettings = mine;
+            HostSettings = host;
             var equipment = settings.Equipment;
             var everyEngine = settings.EveryEngineUsesSetting;
             host.To(settings);
             settings.AcceptLoaded();
             if (equipment != settings.Equipment || everyEngine != settings.EveryEngineUsesSetting)
+            {
                 BrakeSets.Invalidate();
+                TractionCuts.Reset();
+            }
+            if (!settings.Enabled)
+                TractionCuts.ReleaseAll();
             // The cars' lever rows for the host's equipment and empty/loaded setting.
             CarLevers.RefitAll();
             var version = Main.Mod?.Info.Version;
-            if (hostVersion != version)
-                Notice.Warn($"The host runs Realistic Brakes {hostVersion}, you {version}: brakes may differ");
+            var flavorMismatch = !string.IsNullOrEmpty(hostFlavor) && hostFlavor != Main.BuildFlavor;
+            if (hostVersion != version || flavorMismatch)
+            {
+                var mismatch = (hostVersion ?? "", hostFlavor ?? "");
+                if (warnedMismatch != mismatch)
+                {
+                    warnedMismatch = mismatch;
+                    var hostLabel = string.IsNullOrEmpty(hostFlavor) ? hostVersion : $"{hostVersion} ({hostFlavor})";
+                    var localLabel = string.IsNullOrEmpty(hostFlavor) ? version : $"{version} ({Main.BuildFlavor})";
+                    Notice.Warn($"The host runs Realistic Brakes {hostLabel}, you {localLabel}: brakes may differ");
+                }
+                else if (!mine.SameAs(host))
+                    Notice.Show("Realistic Brakes: using the host's brake settings for this session");
+            }
             else if (!mine.SameAs(host))
                 Notice.Show("Realistic Brakes: using the host's brake settings for this session");
         }
@@ -319,6 +365,8 @@ namespace RealisticBrakes.Sim
         /// <summary>Gives back this player's own model settings as the session ends.</summary>
         public static void RestoreOwnSettings()
         {
+            HostSettings = null;
+            warnedMismatch = null;
             var settings = Main.Settings;
             if (settings == null || OwnSettings == null)
                 return;
@@ -328,7 +376,12 @@ namespace RealisticBrakes.Sim
             OwnSettings = null;
             settings.AcceptLoaded();
             if (equipment != settings.Equipment || everyEngine != settings.EveryEngineUsesSetting)
+            {
                 BrakeSets.Invalidate();
+                TractionCuts.Reset();
+            }
+            if (!settings.Enabled)
+                TractionCuts.ReleaseAll();
             CarLevers.RefitAll();
         }
     }

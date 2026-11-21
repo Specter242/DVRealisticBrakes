@@ -25,7 +25,7 @@ namespace RealisticBrakes.Controls
         public const string Title = "The Air-Brake Pocket-Book";
 
         /// <summary>What the inventory says of it.</summary>
-        public const string Description = "How the air brake works: each engine's brake valve on European and American equipment, " +
+        public const string Description = "How the brakes work: each engine's brake valve on European, American, and vacuum equipment, " +
             "the cars, and the settings. Press a line on its contents page, or a tab down its edge, to turn to that chapter.";
 
         // The schematic map's page, m: its paper mesh's 0.297 x 0.42 at the paper's 0.78 x 0.715. The page image's

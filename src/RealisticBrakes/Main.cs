@@ -37,7 +37,16 @@ namespace RealisticBrakes
             {
                 if (FailedPatches.Count > 0)
                     GUILayout.Label(StandAsideWarning.Message + " The log names what failed.");
+                var isGuest = Sim.Net.IsGuest;
+                var hostModel = isGuest ? (Sim.Net.HostSettings ?? Sim.Net.ModelSettings.From(Settings)) : default;
+                if (isGuest)
+                    GUILayout.Label("In multiplayer: brake model settings come from the host.");
                 Settings.Draw(modEntry);
+                if (isGuest && !hostModel.SameAs(Sim.Net.ModelSettings.From(Settings)))
+                {
+                    hostModel.To(Settings);
+                    Settings.AcceptLoaded();
+                }
                 DrawBooklet();
             };
             modEntry.OnSaveGUI = _ => Settings.Save(modEntry);
@@ -118,6 +127,8 @@ namespace RealisticBrakes
             modEntry.Logger.Log("Realistic Brakes: the model runs every brake set.");
             return true;
         }
+
+        internal const string BuildFlavor = "public";
 
         /// <summary>
         /// Which build this is, for the log: the public release or a test

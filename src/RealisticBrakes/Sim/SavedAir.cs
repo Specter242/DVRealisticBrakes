@@ -49,6 +49,15 @@ namespace RealisticBrakes.Sim
                 WriteValve(entry, brake.Distributor, "");
             if (brake.ControlValve != null)
                 WriteAmerican(entry, brake.ControlValve);
+            if (brake.VacuumCylinder != null)
+                WriteVacuum(entry, brake.VacuumCylinder);
+            if (brake.VacuumEngine != null)
+            {
+                entry["family"] = "VAC";
+                entry["ownBrake"] = (float)brake.VacuumEngine.BrakeShare;
+                if (brake.VacuumEngine.BailedOff > 0)
+                    entry["ownBailed"] = (float)brake.VacuumEngine.BailedOff;
+            }
             var engine = brake.Locomotive;
             if (engine != null)
             {
@@ -69,7 +78,28 @@ namespace RealisticBrakes.Sim
         }
 
         // Whether the car is an engine, whose handle's added notch is saved with it.
-        private static bool HasEngine(CarBrake brake) => brake.Locomotive != null;
+        private static bool HasEngine(CarBrake brake) => brake.Locomotive != null || brake.VacuumEngine != null;
+
+        private static void WriteVacuum(JObject entry, VacuumCylinder valve)
+        {
+            entry["family"] = "VAC";
+            entry["load"] = valve.Load == LoadSetting.Loaded ? "loaded" : "empty";
+            entry["isolated"] = valve.Isolated;
+            entry["chamber"] = CarAir.Bar(valve.Chamber.Pressure);
+            entry["underside"] = CarAir.Bar(valve.Underside.Pressure);
+        }
+
+        private static void ReadVacuum(JObject entry, VacuumCylinder valve)
+        {
+            var load = (string)entry["load"];
+            if (load != null)
+                valve.Load = load == "empty" ? LoadSetting.Empty : LoadSetting.Loaded;
+            valve.Isolated = (bool?)entry["isolated"] ?? false;
+            var chamber = (float?)entry["chamber"];
+            var underside = (float?)entry["underside"];
+            if (chamber.HasValue && underside.HasValue)
+                valve.Restore(CarAir.Pa(chamber.Value), CarAir.Pa(underside.Value));
+        }
 
         private static void WriteAmerican(JObject entry, AarControlValve valve)
         {
@@ -79,6 +109,8 @@ namespace RealisticBrakes.Sim
             entry["applied"] = valve.Applied;
             entry["emergency"] = valve.Emergency;
             entry["cylinderRelease"] = valve.CylinderReleaseOpen;
+            if (valve.CylinderReleaseOpen && !double.IsNaN(valve.BledPipeMin) && !double.IsInfinity(valve.BledPipeMin))
+                entry["bledPipeMin"] = CarAir.Bar(valve.BledPipeMin);
             entry["retainer"] = valve.Retainer.ToString();
             entry["emergencyReservoir"] = CarAir.Bar(valve.EmergencyReservoir.Pressure);
             entry["quickAction"] = CarAir.Bar(valve.QuickActionChamber.Pressure);
@@ -98,7 +130,9 @@ namespace RealisticBrakes.Sim
             {
                 valve.RestoreLatch(applied.Value, (bool?)entry["emergency"] ?? false);
                 // A bled car stays released until its pipe is recharged.
-                valve.RestoreCylinderRelease((bool?)entry["cylinderRelease"] ?? false);
+                var bledMin = (float?)entry["bledPipeMin"];
+                valve.RestoreCylinderRelease((bool?)entry["cylinderRelease"] ?? false,
+                    bledMin.HasValue ? CarAir.Pa(bledMin.Value) : double.PositiveInfinity);
             }
             if (System.Enum.TryParse<Retainer>((string)entry["retainer"] ?? "", out var retainer))
                 valve.Retainer = retainer;
@@ -157,6 +191,15 @@ namespace RealisticBrakes.Sim
                 ReadValve(entry, brake.Distributor, "");
             if (brake.ControlValve != null)
                 ReadAmerican(entry, brake.ControlValve);
+            if (brake.VacuumCylinder != null && family == "VAC")
+                ReadVacuum(entry, brake.VacuumCylinder);
+            // A diesel's cylinders come back from the stock key; a steam engine's steam brake is saved here.
+            var share = (float?)entry["ownBrake"];
+            if (brake.VacuumEngine != null && family == "VAC" && share.HasValue && brake.VacuumEngine.Spec.SteamBrake)
+                brake.VacuumEngine.RestoreOwnBrake(share.Value);
+            // A diesel's bail, which holds while its application does.
+            if (brake.VacuumEngine != null && family == "VAC" && brake.VacuumEngine.CanBailOff)
+                brake.VacuumEngine.BailedOff = (float?)entry["ownBailed"] ?? 0f;
             var engine = brake.Locomotive;
             // An air engine's entry has no family, or its own valve's.
             if (engine != null && (family == null || family == "AAR"))

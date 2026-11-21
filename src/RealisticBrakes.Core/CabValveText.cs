@@ -1,17 +1,23 @@
 using System;
+using System.Globalization;
 
 namespace RealisticBrakes.Core
 {
  public static class CabValveText
     {
-        /// <summary>The train brake handle's position, on a self-lapping valve if <paramref name="selfLapping"/>.</summary>
-        public static string TrainBrake(LocomotiveBrake engine, bool selfLapping)
+        /// <summary>
+        /// The train brake handle's position, on a self-lapping valve if <paramref name="selfLapping"/>;
+        /// when cut out, <paramref name="anotherValveCutIn"/> says whether another engine in the train works the pipe.
+        /// </summary>
+        public static string TrainBrake(LocomotiveBrake engine, bool selfLapping, bool anotherValveCutIn = true)
         {
             var valve = engine?.DriverValve;
             if (valve == null)
                 return null;
             if (!valve.CutIn)
-                return "Train brake: cut out (the leading engine's valve works the pipe)";
+                return anotherValveCutIn
+                    ? "Train brake: cut out (the leading engine's valve works the pipe)"
+                    : "Train brake: cut out (no brake valve working the pipe — cut it in to control the train)";
             var er = Bar(valve.EqualizingReservoir.Pressure - Air.Atmosphere);
             switch (valve.Position)
             {
@@ -22,15 +28,15 @@ namespace RealisticBrakes.Core
                 case DriverValvePosition.Holding:
                     return "Train brake: holding (the train releases and recharges; the engine's brakes stay on)";
                 case DriverValvePosition.Lap:
-                    return $"Train brake: lap (equalizing reservoir {er:F1} bar)";
+                    return $"Train brake: lap (equalizing reservoir {er} bar)";
                 case DriverValvePosition.Apply:
-                    return $"Train brake: service (equalizing reservoir coming down, {er:F1} bar; lap to hold it)";
+                    return $"Train brake: service (equalizing reservoir coming down, {er} bar; lap to hold it)";
                 case DriverValvePosition.Service:
                     // Made from running and any overcharge the valve carries through the application.
                     var reduction = valve.Spec.Running + valve.OverchargeLeft + Air.Atmosphere - valve.EqualizingTarget;
                     return reduction >= valve.Spec.FullService - 1
-                        ? $"Train brake: full service ({Bar(reduction):0.0#} bar reduction)"
-                        : $"Train brake: service ({Bar(reduction):0.0#} bar reduction)";
+                        ? $"Train brake: full service ({Bar(reduction, "0.0#")} bar reduction)"
+                        : $"Train brake: service ({Bar(reduction, "0.0#")} bar reduction)";
                 case DriverValvePosition.Emergency:
                     return "Train brake: emergency";
                 default:
@@ -57,7 +63,7 @@ namespace RealisticBrakes.Core
                 text = "Independent brake: " + (engine.HeldInRelease ? "release" : PositionName(engine.IndependentAt));
                 if (held >= Shown)
                 {
-                    text += $", {Bar(held):F1} bar";
+                    text += $", {Bar(held)} bar";
                     if (engine.IndependentAt == IndependentPosition.Running && !engine.ReleasePipeOpen)
                         text += ", held until the train brake is in running";
                 }
@@ -67,7 +73,7 @@ namespace RealisticBrakes.Core
                 var independent = engine.Spec.IndependentMaximum * Math.Max(0, Math.Min(1, engine.Independent));
                 text = independent < Shown
                     ? "Independent brake: released"
-                    : $"Independent brake: {Bar(independent):F1} bar (of {Bar(engine.Spec.IndependentMaximum):F1})";
+                    : $"Independent brake: {Bar(independent)} bar (of {Bar(engine.Spec.IndependentMaximum)})";
             }
             var automatic = engine.AutomaticCylinder;
             var bailed = engine.AutomaticApplied ? engine.BailedOff : 0;
@@ -76,13 +82,15 @@ namespace RealisticBrakes.Core
                 && (automatic >= Shown || (s6 && engine.IndependentCylinder >= Shown && !engine.ReleasePipeOpen));
             if (automatic >= Shown || bailed >= Shown)
             {
-                text += $"; train brake on the engine {Bar(automatic):F1} bar";
+                text += $"; train brake on the engine {Bar(automatic)} bar";
                 if (bailed >= Shown)
-                    text += $", {Bar(bailed):F1} bailed off";
+                    text += $", {Bar(bailed)} bailed off";
             }
             if (hint)
                 text += notch ? " (hold the handle in release, below running, to bail off)"
-                    : engine.Spec.HoldsAutomaticBrake ? " (click and hold to bail off)" : " (click to bail off)";
+                    : engine.Spec.HoldsAutomaticBrake ? " (click and hold to bail off)"
+                    : engine.Spec.GraduatedBail ? " (click to bail off, hold to graduate)"
+                    : " (click to bail off)";
             return text;
         }
 
@@ -110,6 +118,7 @@ namespace RealisticBrakes.Core
         // Less than this, gauge Pa (0.05 bar), reads as nothing.
         private const double Shown = 0.05 * Air.Bar;
 
-        private static double Bar(double pascals) => pascals / Air.Bar;
+        private static string Bar(double pascals, string format = "F1") =>
+            (pascals / Air.Bar).ToString(format, CultureInfo.InvariantCulture);
     }
 }
