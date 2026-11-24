@@ -11,6 +11,8 @@ namespace RealisticBrakes
         American,
 
  Vacuum,
+
+ Russian,
     }
 
     /// <summary>How American freight cars' brakes are sized for their load.</summary>
@@ -39,8 +41,11 @@ namespace RealisticBrakes
         [Draw("Run the realistic brake", Tooltip = "Off: the game's own brake runs, from the pressures this one left." + HostApplies)]
         public bool Enabled = true;
 
-        [Draw("Brake equipment", DrawType.ToggleGroup, Tooltip = "For the cars, and for the engines whose own isn't known (or every engine, with\nthe setting below). European: UIC distributors, graduated release, G/P; the\nengines keep a self-lapping independent. American: AB valves, direct release,\nretainers, emergency reservoirs; manual-lap engines (steamers, DM3) get the\nE-T (H-6 valve, S-6 independent), self-lapping engines the 26-L. Vacuum, every\nengine and car: British practice at 21 in, graduated both ways, slow on long\ntrains; steam engines have ejectors and a steam brake, their air pump shut and\nits handwheel blocked, the small ejector running while there's steam; diesels\nhave exhausters. Changing it re-reads every car." + HostApplies)]
+        [Draw("Brake equipment", DrawType.ToggleGroup, Tooltip = "For the cars, and for the engines whose own isn't known (or every engine, with\nthe setting below). European: UIC distributors, graduated release, G/P; the\nengines keep a self-lapping independent. American: AB valves, direct release,\nretainers, emergency reservoirs; manual-lap engines (steamers, DM3) get the\nE-T (H-6 valve, S-6 independent), self-lapping engines the 26-L. Vacuum, every\nengine and car: British practice at 21 in, graduated both ways, slow on long\ntrains; steam engines have ejectors and a steam brake, their air pump shut and\nits handwheel blocked, the small ejector running while there's steam; diesels\nhave exhausters. Russian, every engine: the No. 394 brake valve (I to VI with\nVA) and the No. 254 independent, on European cars. Changing it re-reads every\ncar." + HostApplies)]
         public Equipment Equipment = Equipment.European;
+
+        [Draw("Charging pressure, bar", DrawType.Slider, Min = 4.8, Max = 6.5, Precision = 1, VisibleOn = "Equipment|Russian", Tooltip = "What the No. 394 holds the brake pipe at in II, 4.8 to 6.5 bar; the cars charge\nto it. Changing it re-reads every car." + HostApplies)]
+        public float ChargingPressure = 5.0f;
 
         [Draw("Every engine uses this equipment", InvisibleOn = "Equipment|Vacuum", Tooltip = "Off: each engine has its own prototype's: the S282, S060, and the American\ncustom engines American, the stock diesels and the BR95 European, the rest the\nsetting. The cars always use the setting." + HostApplies)]
         public bool EveryEngineUsesSetting;
@@ -108,6 +113,7 @@ namespace RealisticBrakes
 
         private Equipment drawnEquipment = Equipment.European;
         private bool drawnEveryEngine;
+        private float drawnCharging = 5.0f;
         private Sim.Net.ModelSettings drawnModel;
 
         /// <summary>Notes the equipment as loaded, so only a change of it re-reads the cars.</summary>
@@ -115,6 +121,7 @@ namespace RealisticBrakes
         {
             drawnEquipment = Equipment;
             drawnEveryEngine = EveryEngineUsesSetting;
+            drawnCharging = ChargingPressure;
             drawnLevers = (Enabled, Equipment, ManualEmptyLoaded, BrakeForceFromCar);
             drawnModel = Sim.Net.ModelSettings.From(this);
         }
@@ -132,10 +139,12 @@ namespace RealisticBrakes
                 if (!host.SameAs(Sim.Net.ModelSettings.From(this)))
                     host.To(this);
             }
-            if (Equipment != drawnEquipment || EveryEngineUsesSetting != drawnEveryEngine)
+            if (Equipment != drawnEquipment || EveryEngineUsesSetting != drawnEveryEngine
+                || (Equipment == Equipment.Russian && Mathf.Abs(ChargingPressure - drawnCharging) > 0.001f))
             {
                 drawnEquipment = Equipment;
                 drawnEveryEngine = EveryEngineUsesSetting;
+                drawnCharging = ChargingPressure;
                 Sim.BrakeSets.Invalidate();
                 Sim.TractionCuts.Reset();
             }

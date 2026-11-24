@@ -164,6 +164,8 @@ namespace RealisticBrakes.AdapterCheck
             Check(failed.Count == 0 && patched == originals.Count,
                 $"Harmony applies every patch class ({patched} methods patched)" + (failed.Count > 0 ? $" (not: {string.Join("; ", failed)})" : ""));
 
+            CheckIndependentScrollStep();
+
             Console.WriteLine(failures == 0 ? "adapter checks: all passed" : $"adapter checks: {failures} failed");
             return failures == 0 ? 0 : 1;
         }
@@ -665,6 +667,8 @@ namespace RealisticBrakes.AdapterCheck
                     LoadBraking = LoadBraking.EmptyLoad,
                     DirectAdmission = false,
                     EveryEngineUsesSetting = true,
+                    // What an older host's streams, which don't carry it, read as.
+                    ChargingPressure = 5.0f,
                 };
                 var joinIn = Activator.CreateInstance(joinType);
                 joinType.GetField("Version").SetValue(joinIn, "1.4.5");
@@ -791,6 +795,27 @@ namespace RealisticBrakes.AdapterCheck
                       && (uint)settingsType.GetField("Sequence").GetValue(settingsTrunc) == 88
                       && settingsTruncModel.SameAs(model),
                     "SettingsPacket round-trips full and flavor-omitted streams cleanly");
+
+                // Russian equipment's charging pressure, after the flavor in both packets.
+                var russianModel = model;
+                russianModel.Equipment = Equipment.Russian;
+                russianModel.ChargingPressure = 6.2f;
+                var joinRussianIn = Activator.CreateInstance(joinType);
+                joinType.GetField("Version").SetValue(joinRussianIn, "1.5.1");
+                joinType.GetField("Flavor").SetValue(joinRussianIn, RealisticBrakes.Main.BuildFlavor);
+                joinType.GetField("Settings").SetValue(joinRussianIn, russianModel);
+                var joinRussianOut = RoundTripPacket(joinType, joinRussianIn, out var joinRussianAtEnd);
+                var settingsRussianIn = Activator.CreateInstance(settingsType);
+                settingsType.GetField("Version").SetValue(settingsRussianIn, "1.5.1");
+                settingsType.GetField("Flavor").SetValue(settingsRussianIn, RealisticBrakes.Main.BuildFlavor);
+                settingsType.GetField("Settings").SetValue(settingsRussianIn, russianModel);
+                var settingsRussianOut = RoundTripPacket(settingsType, settingsRussianIn, out var settingsRussianAtEnd);
+                var joinRussianModel = (Sim.Net.ModelSettings)joinType.GetField("Settings").GetValue(joinRussianOut);
+                var settingsRussianModel = (Sim.Net.ModelSettings)settingsType.GetField("Settings").GetValue(settingsRussianOut);
+                Check(joinRussianAtEnd && settingsRussianAtEnd
+                      && joinRussianModel.SameAs(russianModel) && settingsRussianModel.SameAs(russianModel)
+                      && Math.Abs(joinRussianModel.ChargingPressure - 6.2f) < 0.001f && !joinRussianModel.SameAs(model),
+                    "Russian equipment's charging pressure round-trips in the join and settings packets");
 
                 // Join-snapshot timeout via Tick() without a second packet, late JoinPacket safety, same-sequence dedup,
                 // and SettingsPacket peer capability gating.
@@ -1012,6 +1037,34 @@ namespace RealisticBrakes.AdapterCheck
                 settingsProp.SetValue(null, prevSettings);
                 Notice.WarnObserver = prevWarn;
                 Notice.ShowObserver = prevShow;
+            }
+        }
+
+        // A stepped independent fitted as the S-6 scrolls one of its notches a step, whatever the lever was made with. The game
+        // turns a notched lever by its notch angle times scrollWheelHoverScroll a step (LeverBase.ScrollWheelRotate), the notch
+        // angle being its travel over notches - 1 (SteppedJoint). Torun, 2026-11-22: the 8F's independent, 15 notches over 90°
+        // at 2 a step, moved the S-6 two notches, "running goes straight to slow apply, skipping lapping".
+        private static void CheckIndependentScrollStep()
+        {
+            foreach (var matrosov in new[] { false, true })
+            foreach (var (notches, travel, perStep) in new[] { (15, 90f, 2f), (11, 60f, 0.8f), (4, 60f, 1f), (2, 20f, -15f) })
+            {
+                var spec = (DV.CabControls.Spec.Lever)FormatterServices.GetUninitializedObject(typeof(DV.CabControls.Spec.Lever));
+                spec.notches = notches;
+                spec.jointLimitMin = 0f;
+                spec.jointLimitMax = travel;
+                spec.useLimits = true;
+                spec.useSteppedJoint = true;
+                spec.steppedValueUpdate = true;
+                spec.scrollWheelHoverScroll = perStep;
+                Controls.IndependentHandle.Renotch(spec, matrosov);
+                var fitted = matrosov ? Core.LocomotiveBrakeSpec.Matrosov254Notches : Controls.IndependentHandle.Notches;
+                var notchAngle = (spec.jointLimitMax - spec.jointLimitMin) / (spec.notches - 1);
+                var step = notchAngle * spec.scrollWheelHoverScroll;
+                Check(spec.notches == fitted && Math.Abs(Math.Abs(step) - notchAngle) < 1e-4f
+                        && Math.Sign(spec.scrollWheelHoverScroll) == Math.Sign(perStep)
+                        && spec.useInnerLimitSpring && spec.innerLimitMinNotch == 1 && spec.innerLimitMaxNotch == (matrosov ? fitted - 1 : fitted - 2),
+                    $"an independent made with {notches} notches at {perStep} a scroll step, fitted as the {(matrosov ? "No. 254" : "S-6")}, scrolls one of its {spec.notches} notches a step ({step:F1}° of {notchAngle:F1}°)");
             }
         }
 

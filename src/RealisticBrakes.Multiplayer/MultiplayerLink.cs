@@ -571,6 +571,9 @@ namespace RealisticBrakes.Sim
                         if (air.LocalReleaseHeld)
                             packet.Add(netId, NetActionKind.BleedHold, 0, 1, host);
                     }
+                    var caboose = CabooseValve.NotchOf(car);
+                    if (caboose != 0)
+                        packet.Add(netId, NetActionKind.CabooseValve, 0, (byte)caboose, host);
                     if (TrainBrakeHandle.TryGetZone(car.brakeSystem, out var zone, out var hand) || car.IsLoco)
                         packet.Add(netId, NetActionKind.HandleZone, 0, (byte)zone, hand == TrainBrakeHandle.LocalHand ? host : hand);
                 }
@@ -613,6 +616,8 @@ namespace RealisticBrakes.Sim
             writer.Write(Settings.DirectAdmission);
             writer.Write(Settings.EveryEngineUsesSetting);
             writer.Write(Flavor ?? "");
+            // After the flavor, so an older guest stops before it.
+            writer.Write(Settings.ChargingPressure);
         }
 
         public void Deserialize(BinaryReader reader)
@@ -632,6 +637,8 @@ namespace RealisticBrakes.Sim
                 DirectAdmission = true,
                 // Nor engines' own standards: every engine used the setting.
                 EveryEngineUsesSetting = true,
+                // Nor Russian equipment's charging pressure.
+                ChargingPressure = 5.0f,
             };
             Sequence = reader.ReadUInt32();
             States.Clear();
@@ -656,6 +663,8 @@ namespace RealisticBrakes.Sim
                 Settings.EveryEngineUsesSetting = reader.ReadBoolean();
             if (reader.BaseStream.CanSeek && reader.BaseStream.Position < reader.BaseStream.Length)
                 Flavor = reader.ReadString();
+            if (reader.BaseStream.CanSeek && reader.BaseStream.Position < reader.BaseStream.Length)
+                Settings.ChargingPressure = reader.ReadSingle();
         }
     }
 
@@ -695,6 +704,7 @@ namespace RealisticBrakes.Sim
             writer.Write(Settings.EveryEngineUsesSetting);
             writer.Write(Sequence);
             writer.Write(Flavor ?? "");
+            writer.Write(Settings.ChargingPressure);
         }
 
         public void Deserialize(BinaryReader reader)
@@ -712,10 +722,13 @@ namespace RealisticBrakes.Sim
                 LoadBraking = (LoadBraking)reader.ReadByte(),
                 DirectAdmission = reader.ReadBoolean(),
                 EveryEngineUsesSetting = reader.ReadBoolean(),
+                ChargingPressure = 5.0f,
             };
             Sequence = reader.ReadUInt32();
             if (reader.BaseStream.CanSeek && reader.BaseStream.Position < reader.BaseStream.Length)
                 Flavor = reader.ReadString();
+            if (reader.BaseStream.CanSeek && reader.BaseStream.Position < reader.BaseStream.Length)
+                Settings.ChargingPressure = reader.ReadSingle();
         }
     }
 }

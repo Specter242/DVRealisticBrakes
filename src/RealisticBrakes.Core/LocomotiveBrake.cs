@@ -14,6 +14,13 @@ namespace RealisticBrakes.Core
         /// <summary>The independent brake's full application, gauge Pa: the same 3.8 bar as the automatic.</summary>
         public double IndependentMaximum { get; set; } = 3.8 * Air.Bar;
 
+        /// <summary>
+        /// A self-lapping independent's pressures at its applied positions, gauge Pa, from the first to full: the No. 254's
+        /// III to VI. The released position is the handle's 0 and the others follow at even steps to 1, joined straight
+        /// between. Null for a handle whose travel runs straight from nothing to <see cref="IndependentMaximum"/>.
+        /// </summary>
+        public double[] IndependentSteps { get; set; }
+
         /// <summary>The relay's supply from the main reservoir to the cylinders (set to fill in about 4 s, Passenger timing).</summary>
         public Orifice CylinderSupply { get; set; } = new Orifice(5.5);
 
@@ -158,6 +165,44 @@ namespace RealisticBrakes.Core
             spec.Distributor.QuickService = new Orifice(0);
             spec.Distributor.ControlReservoirLimit = UicDistributorSpec.RunningLimit;
             return spec;
+        }
+
+ public static LocomotiveBrakeSpec Russian254() => new LocomotiveBrakeSpec
+        {
+            IndependentMaximum = Russian254Steps[Russian254Steps.Length - 1],
+            IndependentSteps = (double[])Russian254Steps.Clone(),
+        };
+
+        /// <summary>The No. 254's handle positions: I, sprung bail-off; II, running; III to VI, applied.</summary>
+        public const int Matrosov254Notches = 6;
+
+        /// <summary>Whether a No. 254 handle at <paramref name="handle"/>, 0 to 1 over its six notches, stands in I, bail-off.</summary>
+        public static bool Matrosov254InBailOff(double handle) => handle < 0.1;
+
+        /// <summary>
+        /// The No. 254's travel for <see cref="IndependentFor"/>, 0 in II to 1 in VI, from its handle at
+        /// <paramref name="handle"/>, 0 to 1 over its six notches (I at 0, II at 0.2, VI at 1); I reads as II.
+        /// </summary>
+        public static double Matrosov254Travel(double handle) =>
+            double.IsNaN(handle) ? 0 : Math.Max(0, Math.Min(1, (handle - 0.2) / 0.8));
+
+        /// <summary>The No. 254's III, IV, V, and VI, gauge Pa: the middle of each of KirVeliky's ranges.</summary>
+        public static readonly double[] Russian254Steps = { 1.15 * Air.Bar, 1.85 * Air.Bar, 2.85 * Air.Bar, 3.9 * Air.Bar };
+
+        /// <summary>The independent's application, gauge Pa, for its handle at <paramref name="handle"/>, 0 released to 1 full.</summary>
+        public double IndependentFor(double handle)
+        {
+            var v = double.IsNaN(handle) ? 0 : Math.Max(0, Math.Min(1, handle));
+            var steps = IndependentSteps;
+            if (steps == null || steps.Length == 0)
+                return IndependentMaximum * v;
+            // Released at 0, then each step at an even share of the travel, joined straight between.
+            var at = v * steps.Length;
+            var i = (int)Math.Floor(at);
+            if (i >= steps.Length)
+                return steps[steps.Length - 1];
+            var below = i == 0 ? 0 : steps[i - 1];
+            return below + (steps[i] - below) * (at - i);
         }
     }
 
@@ -440,7 +485,7 @@ namespace RealisticBrakes.Core
             }
             // On any engine the independent counts as held in release only for a moment after its last bail.
             bailing = Math.Max(0, bailing - dt);
-            var independent = spec.ManualLapIndependent ? StepIndependent(dt) : spec.IndependentMaximum * Math.Max(0, Math.Min(1, Independent));
+            var independent = spec.ManualLapIndependent ? StepIndependent(dt) : spec.IndependentFor(Independent);
             IndependentCylinder = independent;
             AutomaticCylinder = automatic;
             TargetCylinder = Math.Max(automatic, independent);

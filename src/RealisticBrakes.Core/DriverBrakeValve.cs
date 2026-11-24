@@ -28,6 +28,21 @@ namespace RealisticBrakes.Core
         Emergency,
 
         /// <summary>
+        /// Lap without feed, the No. 394's III: the pipe cut off from the main
+        /// reservoir and from the air, so it holds where it stands and leaks
+        /// creep it down (KirVeliky's tables: "Completely isolates BP from MR").
+        /// <see cref="Lap"/> is its IV, lap with feed.
+        /// </summary>
+        LapWithoutFeed,
+
+        /// <summary>
+        /// Slow service, the No. 394's VA: the equalizing reservoir let down
+        /// slowly, "used to gently gather slack on long freight trains"
+        /// (KirVeliky's tables), for as long as the handle stays.
+        /// </summary>
+        SlowApply,
+
+        /// <summary>
         /// Holding, on the H-6: the pipe fed as in running, while the engine's
         /// own automatic brake is held applied as the train releases and
         /// recharges (Wood, The Westinghouse E-T Air Brake Instruction Pocket
@@ -210,6 +225,60 @@ namespace RealisticBrakes.Core
             return spec;
         }
 
+        /// <summary>
+        /// The No. 394's slow service exhaust from the equalizing reservoir, in VA; closed on the other valves.
+        /// </summary>
+        public Orifice SlowExhaust { get; set; } = new Orifice(0);
+
+        /// <summary>Whether this is the No. 394, whose handle has the seven positions I to VI with VA (<see cref="Matrosov394At"/>).</summary>
+        public bool Matrosov394 { get; set; }
+
+        /// <summary>
+        /// The No. 394's position for its handle's stock travel at <paramref name="handle"/>, 0 to 1: II, III, IV, VA, V,
+        /// and VI at even steps (0, 0.2, 0.4, 0.6, 0.8, 1), each to halfway to its neighbors. I lies before the travel.
+        /// </summary>
+        public static DriverValvePosition Matrosov394At(double handle) =>
+            handle < 0.1 ? DriverValvePosition.Running
+            : handle < 0.3 ? DriverValvePosition.LapWithoutFeed
+            : handle < 0.5 ? DriverValvePosition.Lap
+            : handle < 0.7 ? DriverValvePosition.SlowApply
+            : handle < 0.9 ? DriverValvePosition.Apply
+            : DriverValvePosition.Emergency;
+
+        /// <summary>The No. 394's handle positions over its stock travel: II to VI with VA.</summary>
+        public const int Matrosov394TravelNotches = 6;
+
+ public static DriverBrakeValveSpec Russian394(double charging = 5.0 * Air.Bar) => new DriverBrakeValveSpec
+        {
+            EqualizingVolume = 0.020,
+            Running = Math.Max(Russian394LowestCharging, Math.Min(Russian394HighestCharging, charging)),
+            Overcharge = 0,
+            StrokeLetDown = 0,
+            AdjustRate = 0,
+            // I has no limiter: held, the pipe rises toward the main reservoir.
+            FillLimit = 4.0 * Air.Bar,
+            OverchargeLetDown = 0.2 * Air.Bar / 100,
+            LetsDownRelease = true,
+            FillingStroke = true,
+            MaintainsInLap = true,
+            EqualizingCharge = new Orifice(Russian394ChargeBore),
+            EqualizingExhaust = new Orifice(Russian394ServiceBore),
+            SlowExhaust = new Orifice(Russian394SlowBore),
+            Matrosov394 = true,
+        };
+
+        /// <summary>The No. 394's lowest and highest charging pressures, gauge Pa.</summary>
+        public const double Russian394LowestCharging = 4.8 * Air.Bar, Russian394HighestCharging = 6.5 * Air.Bar;
+
+        /// <summary>The No. 394's equalizing reservoir charging port in II, mm (set by the tests to 30 to 40 s from 0 to 5.0 bar).</summary>
+        public const double Russian394ChargeBore = 1.6;
+
+        /// <summary>The No. 394's service exhaust in V, mm (set by the tests to 5.0 to 4.0 bar in 4 to 5 s).</summary>
+        public const double Russian394ServiceBore = 2.55;
+
+        /// <summary>The No. 394's slow service exhaust in VA, mm (set by the tests to 5.0 to 4.5 bar in 15 to 20 s).</summary>
+        public const double Russian394SlowBore = 0.9;
+
         /// <summary>The H-6's warning port bore, mm (inferred).</summary>
         public const double WarningBore = 1.3;
 
@@ -285,8 +354,10 @@ namespace RealisticBrakes.Core
                         return running + OverchargeLeft - Math.Max(spec.MinimumReduction, Math.Min(spec.FullService, ServiceReduction));
                     case DriverValvePosition.Emergency:
                     case DriverValvePosition.Apply:
+                    case DriverValvePosition.SlowApply:
                         return Air.Atmosphere;
                     case DriverValvePosition.Lap:
+                    case DriverValvePosition.LapWithoutFeed:
                         return EqualizingReservoir.Pressure;
                     default:
                         // Running, and the H-6's holding, which feeds the pipe as running does.
@@ -325,7 +396,7 @@ namespace RealisticBrakes.Core
             var running = Air.Atmosphere + spec.Running;
             var er = EqualizingReservoir;
             var applying = Position == DriverValvePosition.Service || Position == DriverValvePosition.Apply
-                || Position == DriverValvePosition.Emergency;
+                || Position == DriverValvePosition.SlowApply || Position == DriverValvePosition.Emergency;
             // Released from an application while an overcharge stands: its let-down waits until the pipe at the engine is
             // back at the reference, so the cars that hold the overcharge in their control reservoirs see it and let go.
             if (spec.StrokeLetDown > 0 && wasApplying && !applying && OverchargeLeft > 0)
@@ -392,6 +463,7 @@ namespace RealisticBrakes.Core
                     }
                     break;
                 case DriverValvePosition.Lap when spec.LetsDownRelease:
+                case DriverValvePosition.LapWithoutFeed when spec.LetsDownRelease:
                     // Lapped, an overcharge stands with the equalizing reservoir, and running lets it down from there.
                     OverchargeLeft = Math.Max(0, Math.Min(spec.FillLimit, er.Pressure - running));
                     break;
@@ -423,7 +495,9 @@ namespace RealisticBrakes.Core
                 spec.EqualizingCharge.PassOneWay(mainReservoir, er, dt, target);
             else if (er.Pressure > target)
             {
-                var port = Position == DriverValvePosition.Emergency ? spec.EmergencyPort : spec.EqualizingExhaust;
+                var port = Position == DriverValvePosition.Emergency ? spec.EmergencyPort
+                    : Position == DriverValvePosition.SlowApply ? spec.SlowExhaust
+                    : spec.EqualizingExhaust;
                 port.Vent(er, dt, target);
             }
 
@@ -432,12 +506,17 @@ namespace RealisticBrakes.Core
             {
                 spec.EmergencyPort.Vent(pipe, dt);
             }
+            else if (Position == DriverValvePosition.LapWithoutFeed)
+            {
+                // III: the pipe cut off from both; nothing passes.
+            }
             else
             {
                 if (Position == DriverValvePosition.Fill)
                     spec.FillPort.PassOneWay(mainReservoir, pipe, dt, Air.Atmosphere + spec.Running + spec.FillLimit);
                 // The H-6 lapped or in service only exhausts the pipe; it feeds it in running, holding, and release.
-                var supply = spec.MaintainsInLap || (Position != DriverValvePosition.Lap && Position != DriverValvePosition.Apply);
+                var supply = spec.MaintainsInLap
+                    || (Position != DriverValvePosition.Lap && Position != DriverValvePosition.Apply && Position != DriverValvePosition.SlowApply);
                 // The H-6's feed valve in running and holding feeds the pipe only up to its setting; an overcharge from release
                 // comes down slowly, as running lets it down (LetsDownRelease).
                 if (followsPipe)

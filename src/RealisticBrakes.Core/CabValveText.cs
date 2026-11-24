@@ -19,6 +19,8 @@ namespace RealisticBrakes.Core
                     ? "Train brake: cut out (the leading engine's valve works the pipe)"
                     : "Train brake: cut out (no brake valve working the pipe — cut it in to control the train)";
             var er = Bar(valve.EqualizingReservoir.Pressure - Air.Atmosphere);
+            if (valve.Spec.Matrosov394)
+                return Matrosov394(valve, er);
             switch (valve.Position)
             {
                 case DriverValvePosition.Fill:
@@ -29,6 +31,10 @@ namespace RealisticBrakes.Core
                     return "Train brake: holding (the train releases and recharges; the engine's brakes stay on)";
                 case DriverValvePosition.Lap:
                     return $"Train brake: lap (equalizing reservoir {er} bar)";
+                case DriverValvePosition.LapWithoutFeed:
+                    return $"Train brake: lap without feed (the pipe cut off; equalizing reservoir {er} bar)";
+                case DriverValvePosition.SlowApply:
+                    return $"Train brake: slow service (equalizing reservoir coming down slowly, {er} bar; lap to hold it)";
                 case DriverValvePosition.Apply:
                     return $"Train brake: service (equalizing reservoir coming down, {er} bar; lap to hold it)";
                 case DriverValvePosition.Service:
@@ -41,6 +47,32 @@ namespace RealisticBrakes.Core
                     return "Train brake: emergency";
                 default:
                     return "Train brake: running";
+            }
+        }
+
+        // The No. 394's positions by their numbers, as its handle is marked.
+        private static string Matrosov394(DriverBrakeValve valve, string er)
+        {
+            switch (valve.Position)
+            {
+                case DriverValvePosition.Fill:
+                    return "Train brake: I, release and charging (main reservoir straight into the pipe; back to II before the train overcharges)";
+                case DriverValvePosition.LapWithoutFeed:
+                    return $"Train brake: III, lap without feed (the pipe cut off; equalizing reservoir {er} bar)";
+                case DriverValvePosition.Lap:
+                    return $"Train brake: IV, lap with feed (equalizing reservoir {er} bar)";
+                case DriverValvePosition.SlowApply:
+                    return $"Train brake: VA, slow service (equalizing reservoir coming down slowly, {er} bar; III or IV to hold it)";
+                case DriverValvePosition.Apply:
+                case DriverValvePosition.Service:
+                    return $"Train brake: V, service (equalizing reservoir coming down, {er} bar; III or IV to hold it)";
+                case DriverValvePosition.Emergency:
+                    return "Train brake: VI, emergency";
+                default:
+                    var charging = Bar(valve.Spec.Running);
+                    return valve.OverchargeLeft > 0.005 * Air.Bar
+                        ? $"Train brake: II, train (charging pressure {charging} bar; the overcharge coming down slowly, equalizing reservoir {er} bar)"
+                        : $"Train brake: II, train (charging pressure {charging} bar)";
             }
         }
 
@@ -70,7 +102,8 @@ namespace RealisticBrakes.Core
             }
             else
             {
-                var independent = engine.Spec.IndependentMaximum * Math.Max(0, Math.Min(1, engine.Independent));
+                // What the handle asks for, by the independent's own steps where it has them (the No. 254).
+                var independent = engine.Spec.IndependentFor(engine.Independent);
                 text = independent < Shown
                     ? "Independent brake: released"
                     : $"Independent brake: {Bar(independent)} bar (of {Bar(engine.Spec.IndependentMaximum)})";

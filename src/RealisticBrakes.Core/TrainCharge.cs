@@ -65,6 +65,7 @@ namespace RealisticBrakes.Core
             switch (valve.Position)
             {
                 case DriverValvePosition.Apply:
+                case DriverValvePosition.SlowApply:
                 case DriverValvePosition.Emergency:
                     return true;
                 case DriverValvePosition.Service:

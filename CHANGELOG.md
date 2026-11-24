@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6.0 (2026-11-24)
+
+- New: Russian brake equipment, a fourth choice. Every engine gets the
+  No. 394 driver's brake valve, positions I to VI with VA, and the No. 254
+  independent, with a charging pressure setting of 4.8 to 6.5 bar. The
+  cars keep European distributors for now.
+- New: the caboose has a brake valve, a handle on the red valve beside its
+  gauge. Opened a little, it applies the train's brakes from the rear;
+  opened wide, it stops the train (an emergency on American equipment). On
+  vacuum it is the guard's valve.
+- Fixed: on the LMS 8F with American equipment, one notch of the mouse
+  scroll wheel moved the independent brake two positions, from running
+  straight to slow application. It now moves one.
+
 ## 1.5.1 (2026-11-21)
 
 - Fixed: on the LMS 4F, and other engines whose gauges are modeled at

@@ -81,6 +81,23 @@ namespace RealisticBrakes.Core
         /// <summary>The air the outside vent let out in the last step, kg/s.</summary>
         public double OutsideVentFlow { get; private set; }
 
+        /// <summary>
+        /// The caboose valve's bore, wide open: a ¾ in pipe, as the Westinghouse B-3-A conductor's valve is tapped (ICS
+        /// Westinghouse air brake handbook, 1918, p. 401).
+        /// </summary>
+        public static readonly Orifice CabooseValvePort = new Orifice(19.0);
+
+ public double CabooseValve { get; set; }
+
+        /// <summary>The share of <see cref="CabooseValvePort"/>'s area open at <paramref name="travel"/>: the square, so the first part of the travel makes a gentle reduction and the last an emergency.</summary>
+        public static double CabooseValveArea(double travel)
+        {
+            var t = double.IsNaN(travel) ? 0 : Math.Max(0, Math.Min(1, travel));
+            return t * t;
+        }
+
+ public double CabooseValveFlow { get; private set; }
+
         /// <summary>The car's brake cylinder, or null when it has none of its own.</summary>
         public Chamber Cylinder => Locomotive?.Cylinder ?? VacuumEngine?.Cylinder ?? Valve?.Cylinder;
 
@@ -171,6 +188,8 @@ namespace RealisticBrakes.Core
             if (PipeLeak.IsOpen)
                 PipeLeak.OpenToAtmosphere(PipeSection, dt);
             OutsideVentFlow = OutsideVent && dt > 0 ? Math.Abs(OutsideVentPort.OpenToAtmosphere(PipeSection, dt)) / dt : 0;
+            var open = CabooseValveArea(CabooseValve);
+            CabooseValveFlow = open > 0 && dt > 0 ? Math.Abs(CabooseValvePort.Opened(open).OpenToAtmosphere(PipeSection, dt)) / dt : 0;
         }
     }
 }

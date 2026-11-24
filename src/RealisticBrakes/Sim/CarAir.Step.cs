@@ -47,6 +47,14 @@ namespace RealisticBrakes.Sim
                 engine.Distributor.ReleaseHeld = ReleaseHeld;
                 changed = true;
             }
+            // The caboose valve (CabooseValve), set by a hand here or another player's: the line stays awake while it blows.
+            var caboose = CabooseValve.AnyOpen ? CabooseValve.TravelOf(Car) : 0.0;
+            if (Brake.CabooseValve != caboose)
+            {
+                Brake.CabooseValve = caboose;
+                changed = true;
+            }
+            changed |= caboose > 0;
             // Another mod's independent on an ordinary car (Caboose Brake Handle's on the caboose, Nexus 1774): the game's
             // independent travel, 1 to 4.5 bar absolute, fills its cylinder from its own auxiliary reservoir. Not a tender
             // following its engine, nor an engine, whose own independent this is.
@@ -114,7 +122,12 @@ namespace RealisticBrakes.Sim
                 // A diesel's handle widened before a switch to American equipment, or another player's, keeps its stroke's notch: the 26-L has none, so it reads as release.
                 if (zone == HandleZone.Fill && bs.selfLappingController && !valve.Spec.FillingStroke)
                     zone = HandleZone.Travel;
-                if (zone == HandleZone.Fill)
+                // The No. 394: I before the travel, then II to VI with VA along it, on any engine's handle.
+                if (valve.Spec.Matrosov394)
+                    valve.Position = zone == HandleZone.Fill ? DriverValvePosition.Fill
+                        : zone == HandleZone.Emergency ? DriverValvePosition.Emergency
+                        : DriverBrakeValveSpec.Matrosov394At(handle);
+                else if (zone == HandleZone.Fill)
                     valve.Position = DriverValvePosition.Fill;
                 else if (zone == HandleZone.Emergency)
                     valve.Position = DriverValvePosition.Emergency;
@@ -139,6 +152,8 @@ namespace RealisticBrakes.Sim
             var independent = bs.independentBrakePosition;
             // The S-6's handle stands in positions, read from its own travel; a self-lapping one's through the game's curve.
             engine.Independent = !bs.hasIndependentBrake ? 0
+                // The No. 254's six notches, I (bail-off) and II reading as released.
+                : IsRussianEngine(Car) ? LocomotiveBrakeSpec.Matrosov254Travel(independent)
                 : engine.Spec.ManualLapIndependent || bs.indBrakeCurve == null ? independent
                 : bs.indBrakeCurve.Evaluate(independent);
 
@@ -278,6 +293,8 @@ namespace RealisticBrakes.Sim
             }
             // Another mod venting the pipe at this engine (BrakeSets.VentFromOutside) blows as the brake valve's exhaust does.
             exhaust += Brake.OutsideVentFlow;
+            // The caboose valve blows at its car, heard as that car's brake exhaust.
+            exhaust += Brake.CabooseValveFlow;
             PipeFlow = (float)pipeIn * StockFlowPerKgPerSecond;
             ExhaustFlow = (float)exhaust * StockFlowPerKgPerSecond;
         }

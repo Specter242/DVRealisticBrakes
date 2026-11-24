@@ -105,6 +105,7 @@ namespace RealisticBrakes.Sim
             var pipe = Pa(pipePressure);
             CarBrake brake;
             var american = Main.Settings.Equipment == Equipment.American;
+            var russian = Main.Settings.Equipment == Equipment.Russian;
             if (Main.Settings.Equipment == Equipment.Vacuum)
                 return CreateVacuum(system, car, length, geometry, pipe, generation);
             if (system.hasCompressor)
@@ -114,10 +115,14 @@ namespace RealisticBrakes.Sim
                 // distributing valve. The self-lapping diesels have the 26-L.
                 var americanEngine = IsAmericanEngine(car);
                 var et = americanEngine && system.hasTrainBrake && !system.selfLappingController;
-                var spec = et ? LocomotiveBrakeSpec.EtSteam() : americanEngine ? LocomotiveBrakeSpec.American() : new LocomotiveBrakeSpec();
+                var spec = russian ? LocomotiveBrakeSpec.Russian254()
+                    : et ? LocomotiveBrakeSpec.EtSteam() : americanEngine ? LocomotiveBrakeSpec.American() : new LocomotiveBrakeSpec();
+                if (russian)
+                    spec.Distributor.ControlReservoirLimit = ChargingPressure;
                 if (system.mainResVolume > 0)
                     spec.MainReservoirVolume = system.mainResVolume / 1000.0;
-                var valveSpec = et ? DriverBrakeValveSpec.H6() : americanEngine ? DriverBrakeValveSpec.American() : DriverBrakeValveSpec.Uic();
+                var valveSpec = russian ? DriverBrakeValveSpec.Russian394(ChargingPressure)
+                    : et ? DriverBrakeValveSpec.H6() : americanEngine ? DriverBrakeValveSpec.American() : DriverBrakeValveSpec.Uic();
                 var engine = new LocomotiveBrake(spec, system.hasTrainBrake ? new DriverBrakeValve(valveSpec) : null);
                 brake = new CarBrake(length, geometry, locomotive: engine);
                 engine.MainReservoir.Pressure = Pa(MainReservoirUnsmoothed(system));
@@ -140,7 +145,11 @@ namespace RealisticBrakes.Sim
                 else
                 {
                     // An American coach has graduated-release passenger equipment, which the distributor in P stands for.
-                    var valve = american ? new UicDistributor(UicDistributorSpec.AmericanCoach()) { Mode = BrakingMode.Passenger } : new UicDistributor { Mode = ModeFor(car) };
+                    // Russian cars: UIC distributors stand in for the No. 483 and No. 292 until those are built, their control
+                    // reservoirs held to the No. 394's charging pressure, which has no low-pressure overcharge.
+                    var valve = american ? new UicDistributor(UicDistributorSpec.AmericanCoach()) { Mode = BrakingMode.Passenger }
+                        : russian ? new UicDistributor(new UicDistributorSpec { ControlReservoirLimit = ChargingPressure }) { Mode = ModeFor(car) }
+                        : new UicDistributor { Mode = ModeFor(car) };
                     valve.Restore(Pa(system.controlReservoirPressure), Pa(system.auxReservoirPressure), Pa(system.brakeCylinderPressureUnsmoothed), pipe);
                     brake = new CarBrake(length, geometry, valve);
                 }
@@ -233,10 +242,16 @@ namespace RealisticBrakes.Sim
             return car != null && car.carLivery != null && CarTypes.IsSteamLocomotive(car.carLivery);
         }
 
+ internal static double ChargingPressure =>
+            global::System.Math.Max(DriverBrakeValveSpec.Russian394LowestCharging, global::System.Math.Min(DriverBrakeValveSpec.Russian394HighestCharging, Main.Settings.ChargingPressure * Air.Bar));
+
+        /// <summary>Whether <paramref name="car"/>'s train brake is the No. 394: on Russian equipment, every engine's.</summary>
+        internal static bool IsRussianEngine(TrainCar car) => Main.Settings != null && Main.Settings.Equipment == Equipment.Russian && car != null;
+
         internal static bool IsAmericanEngine(TrainCar car)
         {
             var settings = Main.Settings;
-            if (settings.Equipment == Equipment.Vacuum)
+            if (settings.Equipment == Equipment.Vacuum || settings.Equipment == Equipment.Russian)
                 return false;
             var setting = settings.Equipment == Equipment.American ? AirStandard.American : AirStandard.European;
             var livery = car != null ? car.carLivery : null;

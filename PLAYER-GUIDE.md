@@ -173,11 +173,35 @@ while they recharge.
     the engine's brakes through the train's release. A moment in running
     and back to lap lets off only part.
 
+## The caboose valve
+
+The red valve beside the caboose's brake gauge has a handle. It opens the
+brake pipe to the air at the caboose, so whoever rides at the rear can
+stop the train:
+
+- **American equipment:** the conductor's valve. Opened partway, it brings
+  the pipe down from the rear: on a long train a gentle application,
+  strongest at the rear; a short train may need it opened further. Opened
+  past about halfway, it puts the train in emergency.
+- **European equipment:** an emergency brake valve. Opened a little, it
+  makes a gentle application; wide open, a full one.
+- **Vacuum:** the guard's valve. It lets air into the train pipe at the
+  caboose; wide open, the train applies nearly in full, and the engine's
+  ejector or exhausters release it once it's closed.
+- It stays where you put it. Close it again and the engineer's brake
+  valve, in running, releases the train. An American train first waits
+  out the emergency lockout.
+- The gauge shows the pipe at the caboose. In an application it falls
+  later and further than the engine's.
+- The valve isn't saved: a loaded game has it closed.
+- With Caboose Brake Handle's handle fitted to a caboose, that caboose
+  keeps that handle, and this valve isn't fitted there.
+
 ## Brakes won't release?
 
 Check these first, or turn on the **Brake pressure overlay** in the settings
 to see each car's pressures and flags (`HB`, `CUT OUT`, `VALVE OUT`,
-`HOSE OFF`, `COCK SHUT`):
+`HOSE OFF`, `COCK SHUT`, `CABOOSE VALVE OPEN`):
 
 - **Still charging or releasing:** long trains take real time. A freshly
   coupled cut charges in minutes (about five for fifteen cars, ten for
@@ -203,6 +227,8 @@ to see each car's pressures and flags (`HB`, `CUT OUT`, `VALVE OUT`,
 - **American emergency lockout:** after an emergency on American (AB)
   equipment, the valves lock out recharge for about 60 seconds before the
   pipe will build back up and release.
+- **Caboose valve open:** someone left the caboose's valve open
+  (`CABOOSE VALVE OPEN`): close it.
 - **Uncoupled hoses, closed end cocks, cut-out cars, or retainers:** check
   that every coupled end has its air hose connected (`HOSE OFF` in the
   overlay) and both end cocks open (`COCK SHUT`), that no car's
@@ -294,6 +320,23 @@ The Air-Brake Pocket-Book's chapter 7 has the whole of it.
   gauge shows the steam brake.
 - **Cars:** the bleed handle is the release cord. There are no lever rows.
 
+## Russian brake
+
+Choose **Russian** as the brake equipment and every engine gets the
+Matrosov No. 394 driver's brake valve and the No. 254 independent. The cars
+keep European distributors for now.
+
+- **Train brake (No. 394):** I, release and charging: main reservoir air
+  straight into the pipe, so go back to II soon or the train overcharges;
+  II, train, holding the charging pressure; III, lap without feed; IV, lap
+  with feed; VA, slow service; V, service; VI, emergency. I is the notch
+  before II; II to VI are spread along the handle. The cab text names each.
+- **Independent (No. 254):** hold it in I to bail off the engine's brake;
+  let go and it springs back to II, released. III to VI give about 1.1,
+  1.9, 2.9, and 3.9 bar.
+- **Charging pressure:** 4.8 to 6.5 bar (5.0 by default) in the settings;
+  the cars charge to it.
+
 ## The brake booklet
 
 *The Air-Brake Pocket-Book*, after the Westinghouse instruction books: how
@@ -318,7 +361,10 @@ for what it does.
 - **Run the realistic brake:** off gives the game's own brake back at once,
   from the pressures this one left.
 - **Brake equipment:** European or American, for the cars and for the
-  engines whose own isn't known; or Vacuum, for every engine and car.
+  engines whose own isn't known; or Vacuum, for every engine and car; or
+  Russian, for every engine, with European cars.
+- **Charging pressure, bar** (shown with Russian): what the No. 394 holds
+  the brake pipe at, 4.8 to 6.5.
 - **Every engine uses this equipment:** off by default, so each engine has
   its own prototype's equipment; on, every engine uses the setting. Not
   shown with Vacuum, which every engine uses.
@@ -373,7 +419,7 @@ for what it does.
 
 - **Leak Down:** works.
 - **Caboose Brake Handle:** works. Its handle brakes the caboose from the
-  caboose's own air.
+  caboose's own air. A caboose with that handle fitted has no caboose valve.
 - **Realistic Firing:** use 1.16.2 or newer, which leaves bailing off to
   this mod; older versions also act on the click to bail off. Its air
   pumps work.
@@ -387,8 +433,8 @@ for what it does.
   they have a bleed handle.
 - **Multiplayer:** everyone in a session needs this mod. Guests use the
   host's brake settings for the session, and what anyone does to the car
-  levers, a held bleed, a bail-off, or a diesel handle's added notches
-  reaches everyone. The host's brakes run the physics. Not yet tried in a
+  levers, a held bleed, a bail-off, a diesel handle's added notches, or a
+  caboose valve reaches everyone. The host's brakes run the physics. Not yet tried in a
   session.
 
 ## Not yet

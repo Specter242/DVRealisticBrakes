@@ -52,7 +52,8 @@ namespace RealisticBrakes.Patches
             // A handle widened without both of its value patches would read the new notches as stock values.
             Try("the train brake handle", () =>
             {
-                if (Main.Settings.WidenTrainBrakeHandles
+                // The No. 394's positions are its notches, so its handle is widened whatever the setting.
+                if ((Main.Settings.WidenTrainBrakeHandles || Sim.CarAir.IsRussianEngine(car))
                     && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleNotchPatch)) && !Main.FailedOptionalPatches.Contains(typeof(WidenedHandleSetPatch)))
                     foreach (var handle in trainBrakes)
                         TrainBrakeHandle.Widen(handle, car);

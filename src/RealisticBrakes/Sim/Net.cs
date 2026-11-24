@@ -23,6 +23,9 @@ namespace RealisticBrakes.Sim
 
         /// <summary>The Angleichen key held on an engine, or let go: the value 1 or 0. An older build ignores it.</summary>
         Adjust = 5,
+
+        /// <summary>A caboose's valve moved (<see cref="Controls.CabooseValve"/>): the value its notch, 0 closed. An older build ignores it.</summary>
+        CabooseValve = 6,
     }
 
     /// <summary>One player's action on a car, to be done the same everywhere.</summary>
@@ -131,6 +134,9 @@ namespace RealisticBrakes.Sim
                         if (!own)
                             AdjustKey.SetHold(car, player, action.Value != 0);
                         break;
+                    case NetActionKind.CabooseValve:
+                        Controls.CabooseValve.Set(car, action.Value);
+                        break;
                 }
             }
             finally
@@ -233,6 +239,7 @@ namespace RealisticBrakes.Sim
                 levers.Remove(car);
                 holders.Remove(car);
                 AdjustKey.Forget(car);
+                CabooseValve.Forget(car);
             }
             TrainBrakeHandle.Forget(system);
         }
@@ -278,6 +285,7 @@ namespace RealisticBrakes.Sim
             public LoadBraking LoadBraking;
             public bool DirectAdmission;
             public bool EveryEngineUsesSetting;
+            public float ChargingPressure;
 
             public static ModelSettings From(Settings s) => new ModelSettings
             {
@@ -290,6 +298,7 @@ namespace RealisticBrakes.Sim
                 LoadBraking = s.LoadBraking,
                 DirectAdmission = s.DirectAdmission,
                 EveryEngineUsesSetting = s.EveryEngineUsesSetting,
+                ChargingPressure = s.ChargingPressure,
             };
 
             public void To(Settings s)
@@ -303,12 +312,14 @@ namespace RealisticBrakes.Sim
                 s.LoadBraking = LoadBraking;
                 s.DirectAdmission = DirectAdmission;
                 s.EveryEngineUsesSetting = EveryEngineUsesSetting;
+                s.ChargingPressure = ChargingPressure;
             }
 
             public bool SameAs(ModelSettings o) =>
                 Enabled == o.Enabled && Equipment == o.Equipment && BrakeForceFromCar == o.BrakeForceFromCar && FreightMode == o.FreightMode
                 && ManualEmptyLoaded == o.ManualEmptyLoaded && WidenTrainBrakeHandles == o.WidenTrainBrakeHandles && LoadBraking == o.LoadBraking
-                && DirectAdmission == o.DirectAdmission && EveryEngineUsesSetting == o.EveryEngineUsesSetting;
+                && DirectAdmission == o.DirectAdmission && EveryEngineUsesSetting == o.EveryEngineUsesSetting
+                && Mathf.Abs(ChargingPressure - o.ChargingPressure) < 0.001f;
         }
 
         /// <summary>This player's own model settings while a host's are in use; null otherwise.</summary>

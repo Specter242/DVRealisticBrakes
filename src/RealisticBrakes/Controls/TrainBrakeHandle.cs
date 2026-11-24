@@ -250,7 +250,18 @@ namespace RealisticBrakes.Controls
             // The American 26-L has no filling stroke (DriverBrakeValveSpec.FillingStroke), and the H-6 has holding; the
             // equipment is read as the cab loads.
             var american = Sim.CarAir.IsAmericanEngine(car);
-            var layout = system.selfLappingController
+            // The No. 394, on any engine: its stock travel re-notched into II to VI with VA, and I, where the handle stays,
+            // before it. No spring holds it anywhere.
+            var russian = Sim.CarAir.IsRussianEngine(car);
+            if (russian)
+            {
+                spec.notches = DriverBrakeValveSpec.Matrosov394TravelNotches;
+                spec.useInnerLimitSpring = false;
+                // Its own notches, so one scroll step a notch, as the independent's (IndependentHandle.Renotch).
+                spec.scrollWheelHoverScroll = spec.scrollWheelHoverScroll < 0f ? -1f : 1f;
+            }
+            var layout = russian ? WidenedHandle.ManualLap(spec.notches)
+                : system.selfLappingController
                 ? WidenedHandle.SelfLapping(spec.notches, fillingStroke: !american)
                 : WidenedHandle.ManualLap(spec.notches, holding: american);
             var step = (spec.jointLimitMax - spec.jointLimitMin) / (spec.notches - 1);

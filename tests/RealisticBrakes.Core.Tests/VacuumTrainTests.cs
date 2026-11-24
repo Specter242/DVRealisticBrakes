@@ -146,6 +146,30 @@ namespace RealisticBrakes.Core.Tests;
     }
 
     [Fact]
+    public void TheGuardsValveAppliesTheTrainAndRunningReleasesItOnceClosed()
+    {
+        var rig = new VacuumRig(10, FourWheelWagon);
+        rig.Run(10);
+        rig.Rear.CabooseValve = 1;
+        rig.Run(20);
+        Assert.True(rig.Rear.CabooseValveFlow > 0.01, $"the valve admits {rig.Rear.CabooseValveFlow:F3} kg/s");
+        Assert.All(rig.Cars.Skip(1), c => Assert.True(c.VacuumCylinder!.ForceShare > 0.8, $"{c.VacuumCylinder.ForceShare}"));
+        rig.Rear.CabooseValve = 0;
+        var released = rig.RunUntil(() => rig.Cars.Skip(1).All(c => !c.VacuumCylinder!.Applied), 120);
+        Assert.InRange(released, 10, 60);
+    }
+
+    [Fact]
+    public void TheGuardsValveOpenedPartwayMakesAPartApplication()
+    {
+        var rig = new VacuumRig(10, FourWheelWagon);
+        rig.Run(10);
+        rig.Rear.CabooseValve = 0.5;
+        rig.Run(20);
+        Assert.All(rig.Cars.Skip(1), c => Assert.InRange(c.VacuumCylinder!.ForceShare, 0.05, 0.5));
+    }
+
+    [Fact]
     public void LapHoldsAGraduatedApplication()
     {
         // Lapped with the engine's end let down to 10 in, the pipe evens out along the train, and every car holds alike.

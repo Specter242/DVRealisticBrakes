@@ -177,6 +177,8 @@ namespace RealisticBrakes
                 text.Append(" HOSE OFF");
             if (cockShut)
                 text.Append(" COCK SHUT");
+            if (brake.CabooseValve > 0)
+                text.Append(" CABOOSE VALVE OPEN");
         }
 
         private static void CheckCoupledEnds(TrainCar car, BrakeSystem system, out bool hoseOff, out bool cockShut)
