@@ -29,7 +29,7 @@ INK = "#1e1a15"
 PAPER = "#efe5cc"
 RED = "#9d3427"
 BLUE = "#2e4c80"
-EDITION = "1.6.0"
+EDITION = "1.6.1"
 COVER_LINE = "European and American Equipment"
 
 LEFT, RIGHT = 110, W - 144

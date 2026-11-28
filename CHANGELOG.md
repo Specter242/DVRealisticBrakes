@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 (2026-11-27)
+
+- Russian equipment: the No. 394's train position (II) charges at the real
+  valve's rates. A train's brake pipe recharges sooner after a release, and
+  the equalizing reservoir slows as it nears the charging pressure.
+
 ## 1.6.0 (2026-11-24)
 
 - New: Russian brake equipment, a fourth choice. Every engine gets the

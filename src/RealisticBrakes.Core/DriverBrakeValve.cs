@@ -163,6 +163,15 @@ namespace RealisticBrakes.Core
         /// <summary>The equalizing reservoir's service exhaust, which sets the service rate (inferred: 1.5 bar in about 5 s).</summary>
         public Orifice EqualizingExhaust { get; set; } = new Orifice(1.4);
 
+        /// <summary>
+        /// Whether the equalizing reservoir charges from a feed valve at the
+        /// running pressure rather than straight from the main reservoir: the
+        /// No. 394's No. 348 feed valve, so it slows as it nears the charging
+        /// pressure (KirVeliky, GitHub #3, citing ЦТ-533 ch. 5: 0 to 5.0 bar in
+        /// 30 to 40 s, 3.5 to 5.0 bar in 23 to 25 s).
+        /// </summary>
+        public bool EqualizingFromFeedValve { get; set; }
+
         /// <summary>The relay valve's supply from the main reservoir to the pipe, wide open.</summary>
         public Orifice RelaySupply { get; set; } = new Orifice(8.0);
 
@@ -262,6 +271,8 @@ namespace RealisticBrakes.Core
             FillingStroke = true,
             MaintainsInLap = true,
             EqualizingCharge = new Orifice(Russian394ChargeBore),
+            EqualizingFromFeedValve = true,
+            RelaySupply = new Orifice(Russian394RelayBore),
             EqualizingExhaust = new Orifice(Russian394ServiceBore),
             SlowExhaust = new Orifice(Russian394SlowBore),
             Matrosov394 = true,
@@ -270,8 +281,15 @@ namespace RealisticBrakes.Core
         /// <summary>The No. 394's lowest and highest charging pressures, gauge Pa.</summary>
         public const double Russian394LowestCharging = 4.8 * Air.Bar, Russian394HighestCharging = 6.5 * Air.Bar;
 
-        /// <summary>The No. 394's equalizing reservoir charging port in II, mm (set by the tests to 30 to 40 s from 0 to 5.0 bar).</summary>
-        public const double Russian394ChargeBore = 1.6;
+        /// <summary>
+        /// The No. 394's equalizing reservoir charging port in II, fed from the feed valve, mm: set by the tests to 30 to
+        /// 40 s from 0 to 5.0 bar. The bench's 3.5 to 5.0 bar in 23 to 25 s isn't reached with the same bore (16 to 17 s);
+        /// the two figures need a slower last stretch than an orifice from the feed valve gives.
+        /// </summary>
+        public const double Russian394ChargeBore = 2.1;
+
+        /// <summary>The No. 394's relay supply in II, mm (set by the tests to a 1,000 L volume from 0 to 4.8 bar in 45 to 55 s).</summary>
+        public const double Russian394RelayBore = 9.75;
 
         /// <summary>The No. 394's service exhaust in V, mm (set by the tests to 5.0 to 4.0 bar in 4 to 5 s).</summary>
         public const double Russian394ServiceBore = 2.55;
@@ -490,6 +508,13 @@ namespace RealisticBrakes.Core
             else if (spec.EqualizingFollowsPipe && Position == DriverValvePosition.Fill)
             {
                 // Charged through port j above.
+            }
+            else if (er.Pressure < target && spec.EqualizingFromFeedValve)
+            {
+                // The feed valve holds its outlet at the target, drawing on the main reservoir.
+                var moved = spec.EqualizingCharge.MassFlow(Math.Min(mainReservoir.Pressure, target), er.Pressure) * dt;
+                if (moved > 0)
+                    Flows.Move(mainReservoir, er, Math.Min(moved, Math.Max(0, er.MassToReach(target))));
             }
             else if (er.Pressure < target)
                 spec.EqualizingCharge.PassOneWay(mainReservoir, er, dt, target);
